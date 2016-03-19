@@ -1,0 +1,735 @@
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
+using System.Text;
+using System.Windows;
+using System;
+using System.Diagnostics;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+using Lextm.SharpSnmpLib;
+using Lextm.SharpSnmpLib.Pipeline;
+using Lextm.SharpSnmpLib.Messaging;
+
+namespace snmpd
+{
+    public enum EthernetBoardState
+    {
+        DISCONNECTED,
+        CONNECTED
+    }
+
+    public enum EthernetBoardChannelState
+    {
+        INPUT,
+        OUTPUT
+    }
+
+    public class EthernetBoardPort
+    {
+
+        public int PortNo { get; set; }
+        public IPAddress ParentIP { get; set; }
+        public EthernetBoardState State { get; set; }
+        public List<Channel> channels { get; set; }
+
+        public class Channel
+        {
+            public int Id { get; set; }
+            public bool IsAnalog { get; set; }
+            public int Value { get; set; }
+            public string OID { get; set; }
+            public string Name { get; set; }
+            public int IoPort { get; set; }
+            public EthernetBoardChannelState Mode { get; set; }
+
+            public Channel() { }
+
+            public Channel(int _id, int _ioPort, string _oid, string _name, int _value, EthernetBoardChannelState _mode)
+            {
+                this.Id = _id;
+                this.IoPort = _ioPort;
+                this.OID = _oid;
+                this.Name = _name;
+                this.Value = _value;
+                this.Mode = _mode;
+            }
+        }
+
+        public EthernetBoardPort() { channels = new List<Channel>(); }
+
+        public EthernetBoardPort(string _ip, int _portNo, EthernetBoardState _state)
+        {
+            IPAddress IpObj;
+            channels = new List<Channel>();
+
+            if (IPAddress.TryParse(_ip, out IpObj))
+            {
+                ParentIP = IpObj;
+                State = _state;
+                PortNo = _portNo;
+            }
+        }
+
+        private void AddChannel(Channel ch)
+        {
+            if (this.channels == null)
+                this.channels = new List<Channel>();
+
+            this.channels.Add(ch);
+        }
+
+        private void AddChannel(int _id, int _ioPort, string _oid, string _name, int _value, EthernetBoardChannelState _mode)
+        {
+            Channel ch = new Channel();
+
+            ch.Id = _id; ch.IoPort = _ioPort; ch.OID = _oid; ch.Name = _name; ch.Value = _value; ch.Mode = _mode;
+
+            if (ch.Id == 1 || ch.Id == 5)
+                ch.IsAnalog = true;
+            else
+                ch.IsAnalog = false;
+
+            this.channels.Add(ch);
+        }
+    }
+
+    public class ErrorEventArgs : EventArgs
+    {
+        public Exception Exception { get; set; }
+        public string Source { get; set; }
+        public string Message { get; set; }
+        public string StackTrace { get; set; }
+        public DateTime DateOccurred { get; set; }
+
+        public ErrorEventArgs(Exception ex)
+        {
+            Exception = ex;
+            Source = ex.Source;
+            Message = ex.Message;
+            StackTrace = ex.StackTrace;
+            DateOccurred = DateTime.Now;
+        }
+
+        public override string ToString()
+        {
+            return "Error: " + Message + " Source: " + Source;
+        }
+    }
+
+    public class EthernetBoard
+    {
+        // Declare EventHandler to be used in the onError event
+        public event EventHandler<ErrorEventArgs> ErrorEventHandler;
+        // Declare delegate for access to error handling functions outside of the class
+        public delegate void ErrorHandlerDelegate(object sender, ErrorEventArgs e);
+        // Declare an error event. onError is the virtual function
+        public event ErrorHandlerDelegate onError;
+
+        //protected virtual void onError(object sender, ErrorEventArgs e)
+        //{    // Error Handler
+        //    EventHandler<ErrorEventArgs> handler = ErrorEventHandler;
+
+        //    if (handler != null)
+        //        handler(sender, e);
+        //}
+
+        public delegate void ErrorAddedDelegate(string error);
+        public event ErrorAddedDelegate onErrorRaised;
+
+        public delegate void LoggingRaisedDelegate(string message, string color);
+        public event LoggingRaisedDelegate onLoggingRaised;
+
+        public delegate void DigitalInputDelegate(int boardID, EthernetBoardPort.Channel channel);
+        public event DigitalInputDelegate onDigitalInput;
+
+        public delegate void AnalogueInputDelegate(int boardID, EthernetBoardPort.Channel channel);
+        public event AnalogueInputDelegate onAnalogueInput;
+
+        public delegate void InitDelegate(int boardID, List<EthernetBoardPort> ioPorts, List<EthernetBoardPort> adcPorts);
+        public event InitDelegate onInit;
+
+        private delegate void InitializeDelegate(int boardID, string boardName, string ipAddress, int port,
+            string password, int digitalInputRefreshInMs, int analogueInputRefreshInMs,
+            bool bAutoRefreshDigitalInput, bool bAutoRefreshAnalogueInput);
+
+        private const int LISTEN_PORT = 161;
+        private const int RECEIVE_PORT = 162;
+        private const int DIG_CHAN_START_NO = 1;
+        private const int DIG_CHAN_PER_PORT = 8;
+        private const int ALG_CHAN_START_NO = 3;
+        private const int ALG_CHAN_PER_PORT = 4;
+        private const int SNMP_TIMEOUT = 2000;
+
+        private string _BoardName;
+        private int _BoardID;
+        private int _Port;
+        private string _IP_Address;
+        private string _Community;
+        private bool _IsInitialized = false;
+        private bool _DigitalTimerActive = false;
+        private bool _AnalogTimerActive = false;
+        private IPEndPoint _EndPoint;
+        private IPAddress _IP;
+        private EthernetBoardState _ConnectionState;
+
+        // public readonly properties
+        string BoardName { get { return _BoardName; } }
+        int BoardID { get { return _BoardID; } }
+        int Port { get { return _Port; } }
+        string IP_Address { get { return _IP_Address; } }
+        string Community { get { return _Community; } }
+        public bool IsInitialized { get { return _IsInitialized; } }
+        bool DigitalTimerActive { get { return _DigitalTimerActive; } }
+        bool AnalogTimerActive { get { return _AnalogTimerActive; } }
+        IPEndPoint EndPoint { get { return _EndPoint; } }
+        IPAddress IP { get { return _IP; } }
+        EthernetBoardState ConnectionState { get { return _ConnectionState; } }
+
+        List<EthernetBoardPort.Channel> DigitalChannelsList
+        { get { return CurrentDigitalChannelValues; } }
+
+        List<EthernetBoardPort.Channel> AnalogChannelsList
+        { get { return CurrentAnalogChannelValues; } }
+
+        // Analog timer values
+        private int _TimeoutInMsAnalog = -1;
+        private int _AnalogueInputRefreshInMs = -1;
+        private bool _DoAnalogAutoRefresh = true;
+        public System.Threading.Timer AnalogTimer;
+        public TimerCallback AnalogTimerDelegate;
+        private List<EthernetBoardPort.Channel> CurrentAnalogChannelValues;
+
+        // Digital Timer values
+        private int _TimeoutInMsDigital = -1;
+        private int _DigitalInputRefreshInMs = -1;
+        private bool _DigitalAutoRefresh = true;
+        public System.Threading.Timer DigitalTimer;
+        public TimerCallback DigitalTimerDelegate;
+        private List<EthernetBoardPort.Channel> CurrentDigitalChannelValues;
+
+        // port objects
+        public EthernetBoardPort AdcPort1;
+        public EthernetBoardPort IoPort1;
+        public EthernetBoardPort IoPort2;
+
+        public EthernetBoard()
+        {   // store the current channel values for comparison when checking for new data
+            CurrentDigitalChannelValues = new List<EthernetBoardPort.Channel>();
+            CurrentAnalogChannelValues = new List<EthernetBoardPort.Channel>();
+
+            // init first port 0
+            IoPort1 = new EthernetBoardPort();
+            // set channel info
+            for (int ChannelCount = 0 + DIG_CHAN_START_NO; ChannelCount < DIG_CHAN_PER_PORT + DIG_CHAN_START_NO; ChannelCount++)
+            {
+                EthernetBoardPort.Channel channel = new EthernetBoardPort.Channel();
+                channel.IoPort = 0;
+                channel.Id = ChannelCount;
+                channel.Name = "Digital Port # 0 Channel # " + ChannelCount;
+                channel.OID = "1.3.6.1.4.1.19865.1.2.1." + ChannelCount + ".0";
+                channel.Value = 0;
+                IoPort1.channels.Add(channel);
+                CurrentDigitalChannelValues.Add(channel);
+            }
+
+            // init 2nd port 1
+            IoPort2 = new EthernetBoardPort();
+            for (int ChannelCount = 0 + DIG_CHAN_START_NO; ChannelCount < DIG_CHAN_PER_PORT + DIG_CHAN_START_NO; ChannelCount++)
+            {
+                EthernetBoardPort.Channel channel = new EthernetBoardPort.Channel();
+                channel.IoPort = 1;
+                channel.Id = ChannelCount;
+                channel.Name = "Digital Port # 1 Channel # " + ChannelCount;
+                channel.OID = "1.3.6.1.4.1.19865.1.2.2." + ChannelCount + ".0";
+                channel.Value = 0;
+                IoPort2.channels.Add(channel);
+                CurrentDigitalChannelValues.Add(channel);
+            }
+
+            AdcPort1 = new EthernetBoardPort();
+            // assign the analog ports and channels names, numbers, and other values
+            // 1 analog port with 4 channels
+            for (int C = 0 + ALG_CHAN_START_NO; C < ALG_CHAN_PER_PORT + ALG_CHAN_START_NO; C++)
+            {
+                EthernetBoardPort.Channel channel = new EthernetBoardPort.Channel();
+                channel.IoPort = 0;
+                channel.Id = C;
+                channel.Name = "Analogue Port # 1 Channel #" + C;
+                channel.OID = "1.3.6.1.4.1.19865.1.2.1." + C + ".0";
+                channel.Value = 0;
+                AdcPort1.channels.Add(channel);
+                CurrentAnalogChannelValues.Add(channel);
+            }
+        }
+
+        public bool init(int iBoardID, string sBoardName, string sIpAddress, int iPort, string sCommunity,
+            int iDigitalInputRefreshInMs, int iAnalogueInputRefreshInMs, bool bAutoRefreshDigitalInput,
+            bool bAutoRefreshAnalogueInput)
+        {
+            bool success = false;
+            _BoardID = iBoardID;
+            _Port = iPort;
+            _BoardName = sBoardName;
+            _IP = IPAddress.Parse(sIpAddress);
+            _EndPoint = new IPEndPoint(this.IP, iPort);
+            _IP_Address = sIpAddress;
+            _Community = sCommunity;
+            _ConnectionState = EthernetBoardState.DISCONNECTED;
+
+            // analog timer stuff - Timers dont start automatically 
+            _TimeoutInMsAnalog = EthernetBoard.SNMP_TIMEOUT;
+            _AnalogueInputRefreshInMs = iAnalogueInputRefreshInMs;
+            _DoAnalogAutoRefresh = bAutoRefreshAnalogueInput;
+            AnalogTimerDelegate = new TimerCallback(OnTickAnalog);
+            AnalogTimer = new Timer(AnalogTimerDelegate);
+            StartAnalogTimer();
+
+            // digital timer stuff- Timers dont start automatically 
+            _TimeoutInMsDigital = EthernetBoard.SNMP_TIMEOUT;
+            _DigitalInputRefreshInMs = iDigitalInputRefreshInMs;
+            _DigitalAutoRefresh = bAutoRefreshDigitalInput;
+            DigitalTimerDelegate = new TimerCallback(OnTickDigital);
+            DigitalTimer = new Timer(DigitalTimerDelegate);
+            StartDigitalTimer();
+
+            _IsInitialized = true;
+            success = true;
+
+            if (onLoggingRaised != null)
+                onLoggingRaised("Initialized GPIO Ethernet Board with ID : " + this.BoardID.ToString()
+                    + " and Name : " + this.BoardName + " completed successfully", "#0000FF");
+
+            return success;
+        }
+
+        /// <summary>string SnmpSet(string _sOid, string _sCommunity, int _iChannelState, int _iTimeout)
+        /// Sets a channel value. </summary>
+        /// <param name="_sOid">The OID of the channel to set.</param>
+        /// <param name="_sCommunity">SNMP community name. "public" is the default value.</param>
+        /// <param name="_iChannelValue">The new channel value.</param>
+        /// <param name="_iTimeout">Milliseconds to continue attempting to readthe channel. Default is 0 (Infinite).</param>
+        /// <returns>(string) Not exactly sure what this will return.</returns>
+        public string SnmpSet(string _sOid, string _sCommunity, int _iChannelValue, int _iTimeout)
+        {
+            IList<Lextm.SharpSnmpLib.Variable> result = null;
+            List<Variable> lstVar = new List<Variable>();
+
+            //lstVar.Add(new Variable(new ObjectIdentifier(_sOid), new OctetString("42069")));
+            lstVar.Add(new Variable(new ObjectIdentifier(_sOid), new OctetString(_iChannelValue.ToString())));
+
+            try
+            {
+                Debug.Print("SET Attempt - IP: " + this.IP_Address + " Port: " + this.Port + " OID: " + _sOid);
+                result = Messenger.Set(VersionCode.V1, this.EndPoint, new OctetString(_sCommunity), lstVar, _iTimeout);
+            }
+            catch (Exception ex)
+            {
+                if ((ex is Lextm.SharpSnmpLib.Messaging.TimeoutException) || (ex is System.Net.Sockets.SocketException))
+                {
+                    ex = null; // ignore timeouts
+                }
+                else
+                {
+                    LogStuff("Error setting Digital Values for GPIO Ethernet Board Name : "
+                        + this.BoardName + " Message: " + ex.Message);
+
+                    if (onError != null)
+                        onError(this, new ErrorEventArgs(ex));
+                }
+            }
+
+            if (result != null && result.Count > 0)
+                return result[0].Data.ToString();
+            else
+                return "";
+        }
+
+        /// <summary>string SnmpGet(string _sOid, string _sCommunity, int _iTimeout, string _sDefaultValue)
+        /// Retrieves values from n EndPoint (Ip, Port) 
+        /// </summary>
+        /// <param name="_sOid">The OID of the channel to read.</param>
+        /// <param name="_sCommunity">SNMP community name. "public" is the default value.</param>
+        /// <param name="_iTimeout">Milliseconds to continue attempting to readthe channel. Default is 0 (Infinite).</param>
+        /// <param name="_sDefaultValue">The channels previous value.</param>
+        /// <returns>(string) The new value of the channel</returns>
+        public string SnmpGet(string _sOid, string _sCommunity, int _iTimeout, int _iCurrentValue)
+        {
+            IList<Variable> result = null;
+
+            try
+            {
+                Debug.Print("GET Attempt - IP: " + this.IP_Address + " Port: " + EthernetBoard.LISTEN_PORT + " OID: " + _sOid);
+                result = Messenger.Get(VersionCode.V1,
+                     this.EndPoint,
+                     new OctetString(_sCommunity),
+                     new List<Variable> { new Variable(new ObjectIdentifier(_sOid)) },
+                     _iTimeout);
+            }
+            catch (Exception ex)
+            {
+                if ((ex is Lextm.SharpSnmpLib.Messaging.TimeoutException) || (ex is System.Net.Sockets.SocketException))
+                {
+                    ex = null; // ignore timeouts
+                }
+                else
+                {
+                    LogStuff("Error reading Digital Values for GPIO Ethernet Board ID : " + this.BoardID.ToString()
+                        + " and Name : " + this.BoardName + " Failed !! " + ex.Message);
+
+                    if (onError != null)
+                        onError(this, new ErrorEventArgs(ex));
+                }
+            }
+
+            if (result != null && result.Count > 0)
+                return result[0].Data.ToString();
+            else
+                return _iCurrentValue.ToString();
+        }
+
+        private void analogueInputTimer_Tick(object sender, EventArgs e)
+        {
+            //if (analoguePortsThread == null && (this.BoardID == 0 || this.BoardID == 4))// && !thread.IsAlive)
+            //{
+            //    analoguePortsThread = new System.Threading.Thread(analogueInputsGetAll);
+            //    analoguePortsThread.SetApartmentState(System.Threading.ApartmentState.MTA);
+            //    analoguePortsThread.Priority = System.Threading.ThreadPriority.Highest;
+            //    analoguePortsThread.Start();
+            //}
+        }
+
+        private void analogueInputsGetAll()
+        {
+            foreach (EthernetBoardPort.Channel channel in CurrentAnalogChannelValues)
+            {
+                try
+                {
+                    lock (this)
+                    {
+                        channel.Value = Convert.ToInt16(SnmpGet(channel.OID, "private", SNMP_TIMEOUT, channel.Value));
+
+                        if (onAnalogueInput != null)
+                            onAnalogueInput(this.BoardID, channel);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if ((ex is Lextm.SharpSnmpLib.Messaging.TimeoutException) || (ex is System.Net.Sockets.SocketException))
+                    {
+                        ex = null; // ignore timeouts
+                    }
+                    else
+                    {
+                        LogStuff("Error reading Digital Values for GPIO Ethernet Board ID : " + this.BoardID.ToString()
+                            + " and Name : " + this.BoardName + " Failed !! " + ex.Message);
+
+                        if (onError != null)
+                            onError(this, new ErrorEventArgs(ex));
+                    }
+                }
+            }
+
+            //analoguePortsThread = null;
+        }
+
+        public string getADCPortChannel(EthernetBoardPort.Channel channel = null, int portNum = -1, int channelNum = -1)
+        {
+            string _channelOID = "";
+            int _channelValue = 0;
+
+            if (channel != null && portNum == -1 && channelNum == -1)
+            {
+                _channelOID = channel.OID;
+                _channelValue = channel.Value;
+            }
+            else if (channel == null && portNum != -1 && channelNum != -1)
+            {
+                if (portNum == 0)
+                {
+                    _channelOID = IoPort1.channels[channelNum].OID;
+                    _channelValue = IoPort1.channels[channelNum].Value;
+                }
+                else
+                {
+                    _channelOID = IoPort2.channels[channelNum].OID;
+                    _channelValue = IoPort2.channels[channelNum].Value;
+                }
+            }
+
+            return SnmpGet(_channelOID, this.Community, _TimeoutInMsAnalog, _channelValue);
+        }
+
+        /******************* UTILITY FUNCTIONS ****************************************/
+        /// <summary>Times the execution of a function and outputs both the elapsed time and the function's result.</summary> 
+        static void Time<T>(Func<T> work)
+        {
+            var sw = Stopwatch.StartNew();
+            var result = work();
+            Console.WriteLine(sw.Elapsed + ": " + result);
+            Debug.Print(sw.Elapsed + ": " + result);
+        }
+
+        private void OutputInfo(string OID, int chValue)
+        {
+            Debug.Print("OutputInfo - OID: " + OID + " Value: " + chValue);
+        }
+
+        public void setIOPortChannel(int _iStateValue, EthernetBoardPort.Channel channel = null,
+            int portNum = -1, int channelNum = -1)
+        {
+            EthernetBoardPort.Channel _channel;
+
+            if (channel != null && portNum == -1 && channelNum == -1)
+            {
+                _channel = channel;
+            }
+            else
+            {
+                if (portNum == 0)
+                    _channel = IoPort1.channels[channelNum];
+                else
+                    _channel = IoPort2.channels[channelNum];
+            }
+
+            if (_iStateValue == 0)
+                _channel.Mode = EthernetBoardChannelState.INPUT;
+
+            if (_iStateValue == 1)
+                _channel.Mode = EthernetBoardChannelState.OUTPUT;
+
+            try
+            {
+                SnmpSet(_channel.OID, _Community, _iStateValue, _TimeoutInMsDigital);
+            }
+            catch (Exception ex)
+            {
+                if ((ex is Lextm.SharpSnmpLib.Messaging.TimeoutException) || (ex is System.Net.Sockets.SocketException))
+                {
+                    ex = null; // ignore timeouts
+                }
+                else
+                {
+                    LogStuff("Error reading Digital Values for GPIO Ethernet Board ID : " + this.BoardID.ToString()
+                        + " and Name : " + this.BoardName + " Failed !! " + ex.Message);
+
+                    if (onError != null)
+                        onError(this, new ErrorEventArgs(ex));
+                }
+            }
+        }
+
+        public void StartDigitalTimer()
+        {
+            _DigitalTimerActive = true;
+            DigitalTimer = new System.Threading.Timer(DigitalTimerDelegate,
+                this, _DigitalInputRefreshInMs, _DigitalInputRefreshInMs);
+            Debug.Print(this.BoardName + " Timer Started");
+        }
+
+        public void StopDigitalTimer()
+        {
+            _DigitalTimerActive = false;
+            DigitalTimer.Dispose();
+            Debug.Print(this.BoardName + " Timer Stopped");
+        }
+
+        public void StartAnalogTimer()
+        {
+            _DigitalTimerActive = true;
+            DigitalTimer = new System.Threading.Timer(DigitalTimerDelegate,
+                this, _DigitalInputRefreshInMs, _DigitalInputRefreshInMs);
+            Debug.Print(this.BoardName + " Timer Started");
+        }
+
+        public void StopAnalogTimer()
+        {
+            _DigitalTimerActive = false;
+            DigitalTimer.Dispose();
+            Debug.Print(this.BoardName + " Timer Stopped");
+        }
+        /*********************************************************************************/
+        /*************************** EVENT HANDLERS **************************************/
+
+        // This is the timer tick code. Executes every (_DigitalInputRefreshInMs) milliseconds
+        public void OnTickDigital(object ebObject)
+        {    // Timer Event Handler
+            EthernetBoard brd = (EthernetBoard)ebObject;
+
+            // Use Interlocked to set timer increment
+            System.Threading.Interlocked.Increment(ref this._DigitalInputRefreshInMs);
+            CheckForNewDigitalData(IoPort1);
+            CheckForNewDigitalData(IoPort2);
+        }
+
+        public void OnTickAnalog(object ebObject)
+        {
+            CheckForNewAnalogData(AdcPort1);
+        }
+
+        private void CheckForNewDigitalData(object objPort)
+        {
+            string result = String.Empty;
+            int ListIndex = -1;
+
+            //******************************* SCAN PORT *******************************************//
+            // check each channel in the port for updated data (button values)                     //
+            // Compare it to CurrentDigitalChannelValues list. Update list if new values are found //
+            //*************************************************************************************//
+            EthernetBoardPort _IoPort = (EthernetBoardPort)objPort;
+
+            foreach (EthernetBoardPort.Channel channel in _IoPort.channels)
+            {
+                try
+                {
+                    result = SnmpGet(channel.OID, this._Community, EthernetBoard.SNMP_TIMEOUT, channel.Value);
+                    ListIndex = CurrentDigitalChannelValues.FindIndex(x => x.Name == channel.Name);
+
+                    if (ListIndex > -1) // item was found in list
+                    {
+                        if (ListIndex == 0 || ListIndex == 5) // Is analog port - remove it from list
+                        {
+                            lock (this)
+                            {
+                                Debug.Print("Lock - OID: " + channel.OID + " Value: " + channel.Value);
+
+                                channel.Value = CurrentDigitalChannelValues.Max(chnl => chnl.Value);
+                                CurrentDigitalChannelValues.Remove(channel);
+                            }
+                        }
+                        else // digital port - update channel value
+                        {
+                            CurrentDigitalChannelValues.ElementAt(ListIndex).Value = channel.Value;
+                        }
+                    }
+                    else // Not in List - So add it
+                    {
+                        CurrentDigitalChannelValues.Add(channel);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if ((ex is Lextm.SharpSnmpLib.Messaging.TimeoutException) || (ex is System.Net.Sockets.SocketException))
+                    {
+                        ex = null; // ignore timeou
+                    }
+                    else
+                    {
+                        LogStuff("Error reading Digital Values for GPIO Ethernet Board ID : " + this.BoardID.ToString()
+                            + " and Name : " + this.BoardName + " Failed !! " + ex.Message);
+
+                        if (onError != null)
+                            onError(this, new ErrorEventArgs(ex));
+                    }
+                }
+            }
+
+            Debug.Print("CurrentDigitalChannelValues: " + CurrentDigitalChannelValues.ToString());
+        }
+
+        private void CheckForNewAnalogData(object objPort)
+        {
+            string result = String.Empty;
+            int ListIndex = -1;
+
+            //******************************* SCAN PORT *******************************************//
+            // check each channel in the port for updated data (button values)                     //
+            // Compare it to CurrentAnalogChannelValues list. Update list if new values are found  //
+            //*************************************************************************************//
+            EthernetBoardPort _IoPort = (EthernetBoardPort)objPort;
+
+            foreach (EthernetBoardPort.Channel channel in _IoPort.channels)
+            {
+                try
+                {
+                    result = SnmpGet(channel.OID, this._Community, EthernetBoard.SNMP_TIMEOUT, channel.Value);
+                    ListIndex = CurrentAnalogChannelValues.FindIndex(x => x.Name == channel.Name);
+
+                    if (ListIndex > -1) // item was found in list
+                    {
+                        if (ListIndex == 0 || ListIndex == 5) // Is analog port - remove it from list
+                        {
+                            lock (this)
+                            {
+                                Debug.Print("Lock - OID: " + channel.OID + " Value: " + channel.Value);
+
+                                channel.Value = CurrentDigitalChannelValues.Max(chnl => chnl.Value);
+                                CurrentAnalogChannelValues.Remove(channel);
+                            }
+                        }
+                        else // digital port - update channel value
+                        {
+                            CurrentAnalogChannelValues.ElementAt(ListIndex).Value = channel.Value;
+                        }
+                    }
+                    else // Not in List - So add it
+                    {
+                        CurrentAnalogChannelValues.Add(channel);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if ((ex is Lextm.SharpSnmpLib.Messaging.TimeoutException) || (ex is System.Net.Sockets.SocketException))
+                    {
+                        ex = null; // ignore timeou
+                    }
+                    else
+                    {
+                        LogStuff("Error reading Digital Values for GPIO Ethernet Board ID : " + this.BoardID.ToString()
+                            + " and Name : " + this.BoardName + " Failed !! " + ex.Message);
+
+                        if (onError != null)
+                            onError(this, new ErrorEventArgs(ex));
+                    }
+                }
+            }
+
+            Debug.Print("CurrentAnalogChannelValues: " + CurrentAnalogChannelValues.ToString());
+        }
+
+        public void ToggleRelay(EthernetBoardPort.Channel channel)
+        {
+            if (channel != null)
+            {
+                int value = Convert.ToInt32(!Convert.ToBoolean(Convert.ToInt32(channel.Value)));
+
+                setIOPortChannel(value, channel);
+            }
+        }
+
+        public bool ToggleAnalogueInputTimer()
+        {
+            if (_AnalogTimerActive)
+            {
+                StartAnalogTimer();
+                return true;
+            }
+            else
+            {
+                StopAnalogTimer();
+                return false;
+            }
+        }
+
+        public bool ToggleDigitalInputTimer()
+        {
+            if (!_DigitalTimerActive)
+            {
+                StartDigitalTimer();
+                return true;
+            }
+            else
+            {
+                StopDigitalTimer();
+                return false;
+            }
+        }
+
+        public void LogStuff(string msg)
+        {
+            if (onLoggingRaised != null)
+                onLoggingRaised(msg, "#FF0000");
+        }
+    }
+}
