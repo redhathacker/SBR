@@ -14,9 +14,9 @@ namespace snmpd
 {
      public partial class PowerSnmpAgent : Form
      {
-          Manager manager1 = new Manager();
-          SnmpSocket managerSocket;
+          Manager manager1 = new Manager();          
           Manager manager2 = new Manager();
+          SnmpSocket managerSocket;
 
           string myAgentAddress;
 
@@ -44,7 +44,7 @@ namespace snmpd
 
           private void manager1_SendGetRequest(SnmpSocket managerSocket, object state)
           {
-               System.Net.IPEndPoint EndPt = new System.Net.IPEndPoint(IPAddress.Parse(myAgentAddress), EthernetBoard.LISTEN_PORT);
+               System.Net.IPEndPoint EndPt = new System.Net.IPEndPoint(IPAddress.Parse(myAgentAddress), Utilities.LISTEN_PORT);
                //Create Get Request
                GetMessage request = new GetMessage();
                request.Variables.Add(state as Variable);
@@ -62,7 +62,7 @@ namespace snmpd
                Variable vari = e.Messages[0].Variables[0];
                label1.Text += vari.Definition.ToString() + vari.Value.ToString() + "\r\n";
           }
-          //7777777777777777777777777
+
           private void button4_Click(object sender, EventArgs e)
           {
                manager2.Start(sendRequest, manager1.Mib.CreateVariable(NodeName.sysContact, "Systems Admin"));
@@ -83,7 +83,7 @@ namespace snmpd
                request.Community = "private";
 
                //Send request and get response
-               ResponseMessage response = managerSocket.GetResponse(request, new Dart.Snmp.IPEndPoint(myAgentAddress, Utilities.));
+               ResponseMessage response = managerSocket.GetResponse(request, new Dart.Snmp.IPEndPoint(myAgentAddress, Utilities.LISTEN_PORT));
 
                //Marshal message to the UI thread using the Message event
                manager2.Marshal(new ResponseMessage[] { response }, "", null);

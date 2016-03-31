@@ -17,9 +17,8 @@ namespace snmpd
      // this class ensures that none my threads are running on the UI thread
      // Tasks are tricky and they dnt always do what you think think will
      // or run where you think ther will run
-     public class EthernetBoardController
+     public class EthernetBoardController : IDisposable 
      {
-          private IPAddress _myIP;
           Stopwatch sw = new Stopwatch();
 
           private CancellationTokenSource MainCancelTokenFactory = new CancellationTokenSource();
@@ -103,6 +102,9 @@ namespace snmpd
                MainCancelToken = MainCancelTokenFactory.Token;
           }
 
-
+          void IDisposable.Dispose()
+          {
+               throw new NotImplementedException();
+          }
      }
 }

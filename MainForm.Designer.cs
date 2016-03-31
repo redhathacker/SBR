@@ -20,6 +20,7 @@ namespace snmpd
                     {
                          components.Dispose();
                     }
+                    foreach(EthernetBoard brd in )
                }
                base.Dispose(disposing);
           }
@@ -199,7 +200,6 @@ namespace snmpd
                this.btnGetTpl1.Text = "TPL Get/Set Async";
                this.toolTip1.SetToolTip(this.btnGetTpl1, "Get and then Set channels values using the TPL (Async)");
                this.btnGetTpl1.UseVisualStyleBackColor = false;
-               this.btnGetTpl1.Click += new System.EventHandler(this.btnGetTpl1_Click);
                // 
                // btnGet_SmTskLib
                // 
@@ -264,7 +264,6 @@ namespace snmpd
                this.btnGetTpl2.Text = "TPL Get/Set NonAsync";
                this.toolTip1.SetToolTip(this.btnGetTpl2, "Get and then Set channels values using the TPL (Non Async)");
                this.btnGetTpl2.UseVisualStyleBackColor = false;
-               this.btnGetTpl2.Click += new System.EventHandler(this.btnGetTpl2_Click);
                // 
                // panel1
                // 

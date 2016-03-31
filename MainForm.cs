@@ -12,8 +12,7 @@ using System.Net.Sockets;
 using System.Windows.Forms;
 using Lextm.SharpSnmpLib;
 using Lextm.SharpSnmpLib.Messaging;
-
-using Dart.Snmp;
+using System.Collections.Concurrent;
 
 namespace snmpd
 {
@@ -26,7 +25,14 @@ namespace snmpd
           EthernetBoardController MainBoardsController;
 
           Stopwatch sw = new Stopwatch();
-          private CancellationTokenSource MainCancelTokenSource = null;
+          Stopwatch sw2 = new Stopwatch();
+          Stopwatch sw3 = new Stopwatch();
+          Stopwatch sw4 = new Stopwatch();
+          Stopwatch sw5 = new Stopwatch();
+          Stopwatch sw6 = new Stopwatch();
+          Stopwatch sw7 = new Stopwatch();
+
+          private CancellationTokenSource MainCancelTokenSource = new CancellationTokenSource();
           private CancellationToken MainCancelToken;
 
           private EthernetBoard EthernetBoard_1 = new EthernetBoard(0, "192.168.1.40");
@@ -39,6 +45,7 @@ namespace snmpd
           private EthernetBoard EthernetBoard_8 = new EthernetBoard(7, "192.168.1.47");
 
           private List<EthernetBoard> ActiveBoardsList = new List<EthernetBoard>();
+          private BlockingCollection<EthernetBoard> bcBoards = new BlockingCollection<EthernetBoard>();
 
           // ********************* to here is temporary
 
@@ -51,16 +58,48 @@ namespace snmpd
 
                InitializeComponent();
 
+               MainCancelToken = MainCancelTokenSource.Token;
+
                /******************************************************/
                // This is to handle any unhandled errors that occur in an async method. It will get fired when the 
                // task thread is garbage collected. Make sure to eventually LOG these somewhere
                TaskScheduler.UnobservedTaskException += new EventHandler<UnobservedTaskExceptionEventArgs>
-                    (TaskTools.TaskScheduler_UnobservedTaskException);
+                   (TaskTools.TaskScheduler_UnobservedTaskException);
+
+               //onEthernetBoardError_Async
+               EthernetBoard_1.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
+               EthernetBoard_2.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
+               EthernetBoard_3.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
+               EthernetBoard_4.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
+               EthernetBoard_5.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
+               EthernetBoard_6.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
+               EthernetBoard_7.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
+               EthernetBoard_8.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
+
+               EthernetBoard_1.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
+               EthernetBoard_2.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
+               EthernetBoard_3.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
+               EthernetBoard_4.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
+               EthernetBoard_5.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
+               EthernetBoard_6.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
+               EthernetBoard_7.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
+               EthernetBoard_8.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
+
+               bcBoards.Add(EthernetBoard_1);
+               bcBoards.Add(EthernetBoard_2);
+               bcBoards.Add(EthernetBoard_3);
+               bcBoards.Add(EthernetBoard_4);
+               bcBoards.Add(EthernetBoard_5);
+               bcBoards.Add(EthernetBoard_6);
+               bcBoards.Add(EthernetBoard_7);
+               bcBoards.Add(EthernetBoard_8);
+
+               //Task.Run(() => InitBoardsChannelsPorts());
           }
 
           #region ThreadingStuff
 
-          #endregion               
+          #endregion
 
           private void btnDiscover_Click(object sender, EventArgs e)
           {
@@ -87,79 +126,32 @@ namespace snmpd
                txtSpecificIP.Visible = chkSpecificIP.Checked;
           }
 
-          private async Task<string> InitBoardsChannelsPorts()
+          private async Task InitBoardsChannelsPorts()
           {
                StringBuilder sb = new StringBuilder();
+               await bcBoards.ElementAt(0).init("1st board .40", 161, "private", 50, 100, false, false);
+               await bcBoards.ElementAt(1).init("2nd board .41", 161, "private", 50, 100, false, false);
+               await bcBoards.ElementAt(2).init("3rd board .42", 161, "private", 50, 100, false, false);
+               await bcBoards.ElementAt(3).init("4th board .43", 161, "private", 50, 100, false, false);
+               await bcBoards.ElementAt(4).init("5th board .44", 161, "private", 50, 100, false, false);
+               await bcBoards.ElementAt(5).init("6th board .45", 161, "private", 50, 100, false, false);
+               await bcBoards.ElementAt(6).init("7th board .46", 161, "private", 50, 100, false, false);
+               await bcBoards.ElementAt(7).init("8th board .47", 161, "private", 50, 100, false, false);
 
-               //_ActiveBoards.Add(MainBoardsController.GetBoard(0));
+               //await Task.Run(() => EthernetBoard_8.init("8th board .47", 161, "private", 50, 100, false, false))
+          }
 
-               ActiveBoardsList.Add(EthernetBoard_1);
-               ActiveBoardsList.Add(EthernetBoard_2);
-               ActiveBoardsList.Add(EthernetBoard_3);
-               ActiveBoardsList.Add(EthernetBoard_4);
-               ActiveBoardsList.Add(EthernetBoard_5);
-               ActiveBoardsList.Add(EthernetBoard_6);
-               ActiveBoardsList.Add(EthernetBoard_7);
-               ActiveBoardsList.Add(EthernetBoard_8);
-
-               //onEthernetBoardError_Async
-
-               EthernetBoard_1.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
-               EthernetBoard_2.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
-               EthernetBoard_3.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
-               EthernetBoard_4.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
-               EthernetBoard_5.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
-               EthernetBoard_6.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
-               EthernetBoard_7.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
-               EthernetBoard_8.onAsyncError += new EthernetBoard.AsyncErrorHandlerDelegate(onEthernetBoardError_Async);
-
-               //EthernetBoard_1.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
-               //EthernetBoard_2.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
-               //EthernetBoard_3.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
-               //EthernetBoard_4.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
-               //EthernetBoard_5.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
-               //EthernetBoard_6.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
-               //EthernetBoard_7.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
-               //EthernetBoard_8.onError += new EthernetBoard.ErrorHandlerDelegate(onEthernetBoardError);
-
-               //Task Tsk1 = Task.Run(() => EthernetBoard_1.init(0, "1st board .40", "192.168.1.40", 161, "private", 50, 100, false, false));
-               //Task Tsk2 = Task.Run(() => EthernetBoard_2.init(1, "2nd board .41", "192.168.1.41", 161, "private", 50, 100, false, false));
-               //Task Tsk3 = Task.Run(() => EthernetBoard_3.init(2, "3rd board .42", "192.168.1.42", 161, "private", 50, 100, false, false));
-               //Task Tsk4 = Task.Run(() => EthernetBoard_4.init(3, "4th board .43", "192.168.1.43", 161, "private", 50, 100, false, false));
-               //Task Tsk5 = Task.Run(() => EthernetBoard_5.init(4, "5th board .44", "192.168.1.44", 161, "private", 50, 100, false, false));
-               //Task Tsk6 = Task.Run(() => EthernetBoard_6.init(5, "6th board .45", "192.168.1.45", 161, "private", 50, 100, false, false));
-               //Task Tsk7 = Task.Run(() => EthernetBoard_7.init(6, "7th board .46", "192.168.1.46", 161, "private", 50, 100, false, false));
-               //Task Tsk8 = Task.Run(() => EthernetBoard_8.init(7, "8th board .47", "192.168.1.47", 161, "private", 50, 100, false, false));
-
-               await Task.Run(() => EthernetBoard_8.init(7, "8th board .47", "192.168.1.47", 161, "private", 50, 100, false, false), MainCancelToken);
-               await Task.Run(() => EthernetBoard_1.init(0, "1st board .40", "192.168.1.40", 161, "private", 50, 100, false, false), MainCancelToken);
-               await Task.Run(() => EthernetBoard_2.init(1, "2nd board .41", "192.168.1.41", 161, "private", 50, 100, false, false), MainCancelToken);
-               await Task.Run(() => EthernetBoard_3.init(2, "3rd board .42", "192.168.1.42", 161, "private", 50, 100, false, false), MainCancelToken);
-               await Task.Run(() => EthernetBoard_4.init(3, "4th board .43", "192.168.1.43", 161, "private", 50, 100, false, false), MainCancelToken);
-               await Task.Run(() => EthernetBoard_5.init(4, "5th board .44", "192.168.1.44", 161, "private", 50, 100, false, false), MainCancelToken);
-               await Task.Run(() => EthernetBoard_6.init(5, "6th board .45", "192.168.1.45", 161, "private", 50, 100, false, false), MainCancelToken);
-               await Task.Run(() => EthernetBoard_7.init(6, "7th board .46", "192.168.1.46", 161, "private", 50, 100, false, false), MainCancelToken);
-
-               //List<Task> lstTasks = new List<Task>() { { Tsk1 }, { Tsk2 }, { Tsk3 }, { Tsk4 }, { Tsk5 }, { Tsk6 }, { Tsk7 }, { Tsk8 } };
-
-               //try
-               //{
-               //     Task.WaitAll(lstTasks.ToArray());
-               //}
-               //catch (Exception ex)
-               //{
-               //     onEthernetBoardError(this, new ErrorEventArgs(ex));
-               //}
-
-               Parallel.ForEach(ActiveBoardsList, Brd =>
+          private void StartBoardListeners()
+          {
+               Parallel.ForEach(bcBoards, Brd =>
                {
-                    if (Brd.StartTimers())
-                         sb.AppendLine("Timer Started: " + Brd.BoardName);
+                    if (!(Brd.StartTimers()))
+                    {
+                         Debug.Print("Timer NOT Started: " + Brd.BoardName);
+                    }
                });
 
                SetOnOffLabel(true);
-
-               return sb.ToString();
           }
 
           //********************* Random Functions **********************
@@ -203,197 +195,55 @@ namespace snmpd
 
           private async void btnRunInLoop_Click(object sender, EventArgs e)
           {
+               await Task.WhenAll();
+
                string getResults = null;
-               string oldVal = null;
+               int oldVal = -1;
 
-               EthernetBoard Board1 = new EthernetBoard(0, txtToIP.Text);
-               Board1.onError += onEthernetBoardError;
-               Board1.onAsyncError += onEthernetBoardError_Async;
-
-               if (await Task.Run(() => Board1.init(0, "Board 0", "192.168.1.40", 161, "private", 50, 100, true, false)))
+               try
                {
                     while (true)
                     {
-                         foreach (EthernetBoardPort p in Board1.DigitalPortsList)
+                         MainCancelToken.ThrowIfCancellationRequested();
+
+                         foreach (EthernetBoard bd in bcBoards)
                          {
-                              foreach (Channel ch in p.ChannelsList)
+                              MainCancelToken.ThrowIfCancellationRequested();
+
+                              foreach (EthernetBoardPort p in bd.DigitalPortsList)
                               {
-                                   oldVal = ch.Value.ToString();
-                                   getResults = null;
+                                   MainCancelToken.ThrowIfCancellationRequested();
 
-                                   try
+                                   foreach (Channel ch in p.ChannelsList)
                                    {
-                                        getResults = await Task.Run(() => Board1.SnmpGet_Async(ch.OID, MainCancelToken));
+                                        oldVal = ch.Value;
+                                        getResults = null;
 
-                                        if (getResults != null && oldVal == getResults)
-                                             txtOutput.Text += "Results Channel" + ch.Id + " New Val: " + getResults + Environment.NewLine;
+                                        MainCancelToken.ThrowIfCancellationRequested();
+
+                                        getResults = await Task.Run(() =>
+                                            SnmpTools.SnmpGet_Async(ch.OID, bd.IP_Address, MainCancelToken));
+
+                                        if (getResults != null && getResults != oldVal.ToString())
+                                             Debug.Print("Results Channel " + ch.Id + " New Val: " + getResults);
+                                        // async write value here
                                         else
-                                             txtOutput.Text += "Results Channel" + ch.Id + ": " + getResults + Environment.NewLine;
-                                   }
-                                   catch (AggregateException ex)
-                                   {
-                                        txtOutput.Text += "TIMEOUT " + Environment.NewLine;
+                                             Debug.Print("Results Channel " + ch.Id + ": " + getResults);
                                    }
                               }
                          }
                     }
                }
-               // now I need the board to start scanning 161 forever
-               // Open socket, Listen for 2 seconds, return value or null, 
-               // if value updated then update channel. Send new value to the hardware.
-               // Listen again.
-               // else
-               //Value null just rerun listen
-          }
-
-          private async Task<string> DoSomeSets_Async(int pNewValue, CancellationToken ct)
-          {
-               int _port = 161;
-               string sIp = txtToIP.Text;
-               string res = null;
-
-               object LockHelper = new object();
-
-               List<Task<Task<string>>> taskList = new List<Task<Task<string>>>();
-               StringBuilder sb = new StringBuilder();
-               EthernetBoard brd = new EthernetBoard(0, txtToIP.Text);
-
-               if (await Task.Run(() => brd.init(0, "Board 0", "192.168.1.40", _port, "private", 50, 100, true, true)))
+               catch (AggregateException ex)
                {
-                    sw.Restart();
-
-                    lock (LockHelper)
-                    {
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[0].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[1].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[2].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[3].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[4].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[5].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[6].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[7].OID, pNewValue, ct), ct));
-
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[0].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[1].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[2].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[3].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[4].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[5].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[6].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[7].OID, pNewValue, ct), ct));
-
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.AnalogPortsList[0].ChannelsList[0].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.AnalogPortsList[0].ChannelsList[1].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.AnalogPortsList[0].ChannelsList[2].OID, pNewValue, ct), ct));
-                         taskList.Add(Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.AnalogPortsList[0].ChannelsList[3].OID, pNewValue, ct), ct));
-
-                         sb.AppendLine("----------------- DoSomeSets_Async ---------------------");
-
-                         if (pNewValue == 1)
-                              sb.AppendLine("--------------All Boards ON --------------");
-                         else
-                              sb.AppendLine("---------------All Boards OFF --------------");
-
-                         Task tsk = Task.WhenAll(taskList.ToArray());
-                    } // end lock
-                    foreach (Task<Task<string>> ts in taskList)
-                    {
-                         if (ts.IsFaulted)
-                         {
-                              sb.AppendLine("Task Id: " + ts.Id + " TASK IS FAULTED");
-                         }
-                         else if (ts.IsCompleted)
-                         {
-                              sb.AppendLine("Task Id: " + ts.Id + " Task complete - Result: " + res + " Status: " + ts.Status);
-                         }
-                         else
-                         {
-                              sb.AppendLine("Task Id: " + ts.Id + " Task ??? - Result: " + res + " Status: " + ts.Status);
-                         }
-                    }
+                    onEthernetBoardError_Async(this, new AsyncErrorEventArgs(ex));
                }
-               sw.Stop();
-               Debug.Print("Do Some Sets Parallel DONE ----- MilliSeconds: " + sw.ElapsedMilliseconds);
-               sb.AppendLine("Do Some Sets Parallel DONE ----- MilliSeconds: " + sw.ElapsedMilliseconds);
-               return sb.ToString();
-          }
-
-
-          private async Task<string> DoSomeSets_ParallelAsync(int pNewValue, CancellationToken ct)
-          {
-               int _port = 161;
-               string sIp = txtToIP.Text;
-               List<Task<string>> taskList = new List<Task<string>>();
-               //List<Task> taskList = new List<Task>();
-               StringBuilder sb = new StringBuilder();
-               EthernetBoard brd = new EthernetBoard(0, txtToIP.Text);
-
-               if (await Task.Run(() => brd.init(0, "Board 0", "192.168.1.40", _port, "private", 50, 100, true, true)))
+               catch (Exception ez)
                {
-
-                    sw.Restart();
-
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[0].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[1].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[2].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[3].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[4].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[5].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[6].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[7].OID, pNewValue, ct), ct));
-
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[0].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[1].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[2].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[3].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[4].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[5].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[6].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[7].OID, pNewValue, ct), ct));
-
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.AnalogPortsList[0].ChannelsList[0].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.AnalogPortsList[0].ChannelsList[1].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.AnalogPortsList[0].ChannelsList[2].OID, pNewValue, ct), ct));
-                    taskList.Add(await Task.Factory.StartNew(() => brd.SnmpSet_Async(brd.AnalogPortsList[0].ChannelsList[3].OID, pNewValue, ct), ct));
-
-                    sb.AppendLine("----------------- DoSomeSets_Async ---------------------");
-
-                    if (pNewValue == 1)
-                         sb.AppendLine("--------------All Boards ON --------------");
-                    else
-                         sb.AppendLine("---------------All Boards OFF --------------");
-
-                    Parallel.ForEach(taskList, async t =>
-                    {
-                         await t;
-
-                         if (t.IsFaulted)
-                         {
-                              sb.AppendLine("Task Id: " + t.Id + " TASK IS FAULTED");
-                         }
-                         else if (t.IsCompleted)
-                         {
-                              sb.AppendLine("Task Id: " + t.Id + " Task complete - Result: " + t.Result + " Status: " + t.Status);
-                         }
-                         else
-                         {
-                              sb.AppendLine("Task Id: " + t.Id + " Task ??? - Result: " + t.Result + " Status: " + t.Status);
-                         }
-                    });
-
-                    //foreach (Task t in taskList)
-                    //{
-                    //    if (t.IsCompleted)
-                    //        sb.AppendLine("Result: " + t.ToString() + " Status: " + t.Status);
-                    //}
+                    onEthernetBoardError(this, new ErrorEventArgs(ez));
                }
 
-               sw.Stop();
-               Debug.Print("Do Some Sets Parallel DONE ----- MilliSeconds: " + sw.ElapsedMilliseconds + Environment.NewLine);
-               sb.AppendLine("Do Some Sets Parallel DONE ----- MilliSeconds: " + sw.ElapsedMilliseconds);
-               return sb.ToString();
           }
-
 
           private void WriteNewToOutputWindow(string ln)
           {
@@ -418,27 +268,16 @@ namespace snmpd
 
           #region Form Events
 
-          private async void btnGetTpl2_Click(object sender, EventArgs e)
+          private async void btnTPLGetSet_Click(object sender, EventArgs e)
           {
                EthernetBoard brd = new EthernetBoard(0, txtToIP.Text);
 
-               if (await Task.Run(() => brd.init(0, "Board 0", "192.168.1.40", 161, "private", 50, 100, true, true)))
+               if (await Task.Run(() => brd.init("Board 0", 161, "private", 50, 100, true, true)))
                {
                     sw.Restart();
-                    string res = brd.TPLGet_2(MainCancelToken);
 
-                    WriteNewToOutputWindow(res);
-                    AppendToOutputWindow("----------------------- Channel Values -------------------------");
 
-                    foreach (EthernetBoardPort p in brd.DigitalPortsList)
-                    {
-                         AppendToOutputWindow("---------------- PORT " + p.IoPortNo + " ---------------------------");
 
-                         foreach (Channel ch in p.ChannelsList)
-                         {
-                              AppendToOutputWindow("channel: " + ch.OID + " has a value of: " + ch.Value);
-                         }
-                    }
                     sw.Stop();
                     AppendToOutputWindow("TPLGet_2 DONE ----- MilliSeconds: " + sw.ElapsedMilliseconds);
                     Debug.Print("TPLGet_2 DONE ----- MilliSeconds: " + sw.ElapsedMilliseconds);
@@ -480,22 +319,54 @@ namespace snmpd
 
           private async void btnLightsOn_Async_Click(object sender, EventArgs e)
           {
+               StringBuilder sb = new StringBuilder();
+               EthernetBoard brd = new EthernetBoard(0, txtToIP.Text);
+               EthernetBoard brd2 = new EthernetBoard(1, "192.168.1.41");
                string res;
-               sw.Restart();
-               res = await DoSomeSets_ParallelAsync(1, MainCancelToken);
-               sw.Stop();
-               WriteNewToOutputWindow(res);
-               AppendToOutputWindow("Lights On DONE ----- MilliSeconds: " + sw.ElapsedMilliseconds);
+
+               if (await Task.Run(() => brd.init("Board 0", 161, "private", 50, 100, true, true)))
+               {
+                    sw3.Restart();
+                    res = await SnmpTools.SnmpSetAll_ParallelAsync(1, "192.168.1.40", brd.DigitalPortsList[0], MainCancelToken);
+                    sw3.Stop();
+                    WriteNewToOutputWindow(res);
+                    AppendToOutputWindow("Lights On DONE ----- MilliSeconds: " + sw3.ElapsedMilliseconds);
+               }
+
+               if (await Task.Run(() => brd2.init("Board 1", 161, "private", 50, 100, true, true)))
+               {
+                    sw5.Restart();
+                    res = await SnmpTools.SnmpSetAll_Async(1, MainCancelToken);
+                    sw5.Stop();
+                    WriteNewToOutputWindow(res);
+                    AppendToOutputWindow("Lights On DONE ----- MilliSeconds: " + sw5.ElapsedMilliseconds);
+               }
           }
 
           private async void btnLightsOff_Async_Click(object sender, EventArgs e)
           {
+               StringBuilder sb = new StringBuilder();
+               EthernetBoard brd = new EthernetBoard(0, txtToIP.Text);
+               EthernetBoard brd2 = new EthernetBoard(1, "192.168.1.41");
                string res;
-               sw.Restart();
-               res = await DoSomeSets_ParallelAsync(0, MainCancelToken);
-               sw.Stop();
-               WriteNewToOutputWindow(res);
-               AppendToOutputWindow("Lights Off DONE ----- MilliSeconds: " + sw.ElapsedMilliseconds);
+
+               if (await Task.Run(() => brd.init("Board 0", 161, "private", 50, 100, true, true)))
+               {
+                    sw4.Restart();
+                    res = await SnmpTools.SnmpSetAll_ParallelAsync(0, "192.168.1.40", brd.DigitalPortsList[0], MainCancelToken);
+                    sw4.Stop();
+                    WriteNewToOutputWindow(res);
+                    AppendToOutputWindow("Lights OFF DONE ----- MilliSeconds: " + sw4.ElapsedMilliseconds);
+               }
+
+               if (await Task.Run(() => brd2.init("Board 1", 161, "private", 50, 100, true, true)))
+               {
+                    sw7.Restart();
+                    res = await SnmpTools.SnmpSetAll_Async(0, MainCancelToken);
+                    sw7.Stop();
+                    WriteNewToOutputWindow(res);
+                    AppendToOutputWindow("Lights OFF DONE ----- MilliSeconds: " + sw7.ElapsedMilliseconds);
+               }
           }
 
           private void btnClearText_Click(object sender, EventArgs e)
@@ -512,47 +383,18 @@ namespace snmpd
           private void btnEthernetBoard_1_Threads_Click(object sender, EventArgs e)
           {
                EthernetBoard Board1 = new EthernetBoard(0, txtToIP.Text);
-               Task.Run(() => Board1.init(0, "Board 0", "192.168.1.40", 161, "private", 50, 100, true, true));
-          }
-
-          private async void btnEthernetBoard_1_TPL_Click(object sender, EventArgs e)
-          {
-               string res;
-               string _ip = txtToIP.Text.Trim();
-
-               EthernetBoard Board1_T_C = new EthernetBoard(0, txtToIP.Text);
-
-               await Task.Run(() => Board1_T_C.init(0, "Board 40", _ip, 161, "private", 50, 100, true, false));
-
-               sw.Restart();
-
-               res = await Board1_T_C.TPLGet_1(MainCancelToken);
-
-               WriteNewToOutputWindow(res);
-               AppendToOutputWindow("----------------------- Channel Values -------------------------");
-
-               foreach (EthernetBoardPort p in Board1_T_C.DigitalPortsList)
-               {
-                    AppendToOutputWindow("---------------- Board " + p.IoPortNo + " ---------------------------");
-
-                    foreach (Channel ch in p.ChannelsList)
-                    {
-                         AppendToOutputWindow("channel: " + ch.OID + " has a value of: " + ch.Value);
-                    }
-               }
-
-               sw.Stop();
-               AppendToOutputWindow("TPLGet_1 DONE ----- MilliSeconds: " + sw.ElapsedMilliseconds);
-          }
+               Task.Run(() => Board1.init("Board 0", 161, "private", 50, 100, true, true));
+          }   
 
           private async void btnLoad_Click(object sender, EventArgs e)
           {
+               // turn on all boards
                sw.Restart();
 
                try
                {
-                    string res = await InitBoardsChannelsPorts();
-                    WriteNewToOutputWindow(res);
+                    await InitBoardsChannelsPorts();
+                    StartBoardListeners();
                }
                catch (AggregateException ae)
                {
@@ -570,38 +412,47 @@ namespace snmpd
           }
           #endregion
 
-          private void btnGetNonAsync_Click(object sender, EventArgs e)
-          {
-
-          }
 
           private async void btnInitTpl_Click(object sender, EventArgs e)
           {
+               string windowText = await TestInits();
+               AppendToOutputWindow(windowText);
+          }
+
+          private async Task<string> TestInits()
+          {
+               StringBuilder sb = new StringBuilder();
+
                string _ip = txtToIP.Text.Trim();
 
                EthernetBoard brd = new EthernetBoard(0, txtToIP.Text);
 
-               await Task.Run(() => brd.init(0, "Board 40", _ip, 161, "private", 50, 100, true, false));
-
-               sw.Restart();
+               await Task.Run(() => brd.init("Board 0", 161, "private", 50, 100, true, true));
 
                try
                {
-                    await brd.GetInitialValues_Parallel(MainCancelToken);
+                    sw.Restart();
+                    await Task.Run(() => brd.GetInitialValues_Async(MainCancelToken)).ConfigureAwait(false);
+                    sw.Stop();
+                    sb.AppendLine("GetInitialValues_Async DONE ----- MilliSeconds: " + sw.ElapsedMilliseconds);
+
+                    sw3.Restart();
+                    await Task.Run(() => brd.GetInitialValues_Parallel(MainCancelToken)).ConfigureAwait(false);
+                    sw3.Stop();
+                    sb.AppendLine("GetInitialValues_Parallel DONE ----- MilliSeconds: " + sw3.ElapsedMilliseconds);
                }
                catch (AggregateException ae)
                {
-                    onEthernetBoardError_Async(sender, new AsyncErrorEventArgs(ae));
+                    onEthernetBoardError_Async(this, new AsyncErrorEventArgs(ae));
                     Debug.Print("AggregateException btnInitTpl_Click");
                }
                catch (Exception ex)
                {
-                    onEthernetBoardError(sender, new ErrorEventArgs(ex));
+                    onEthernetBoardError(this, new ErrorEventArgs(ex));
                     Debug.Print("Exception btnInitTpl_Click");
                }
 
-               sw.Stop();
-               AppendToOutputWindow("GetInitialValues_Parallel DONE ----- MilliSeconds: " + sw.ElapsedMilliseconds);
+               return sb.ToString();
           }
 
           private async void btnInitGetSet_Click(object sender, EventArgs e)
@@ -610,7 +461,7 @@ namespace snmpd
 
                EthernetBoard brd = new EthernetBoard(0, _ip);
 
-               await Task.Run(() => brd.init(0, "Board 40", _ip, 161, "private", 50, 100, true, false));
+               await Task.Run(() => brd.init("Board 40", 161, "private", 50, 100, true, false));
 
                sw.Restart();
 
@@ -635,110 +486,362 @@ namespace snmpd
 
           private async void btnCompareGets_Click(object sender, EventArgs e)
           {
+               string windowText = await CompareGets();
+               AppendToOutputWindow(windowText);
+          }
+
+          private async Task<string> CompareGets()
+          {
+
+               StringBuilder sb = new StringBuilder();
+
+               IEnumerable<Channel> DigLst1 = new List<Channel>();
+               IEnumerable<Channel> DigLst2 = new List<Channel>();
+               IEnumerable<Channel> AlgLst1 = new List<Channel>();
+
+               string[] arry1;
+               string[] arry2;
+               string[] arry3;
+               string res = null;
                string _ip = txtToIP.Text.Trim();
 
                EthernetBoard brd = new EthernetBoard(0, txtToIP.Text);
 
-               sw.Restart();
-               await Task.Run(() => brd.init(0, "Board 40", _ip, 161, "private", 50, 100, true, false));
-               sw.Stop();
-               AppendToOutputWindow("*****************************init ----- MilliSeconds: " + sw.ElapsedMilliseconds);
-
+               await Task.Run(() => brd.init("Board 0", 161, "private", 50, 100, true, true));
 
                try
                {
 
-                    sw.Restart();
-                    await Task.Run(() => brd.GetVals_Async(brd.DigitalPortsList[0], MainCancelToken));
-                    await Task.Run(() => brd.GetVals_Async(brd.DigitalPortsList[1], MainCancelToken));
-                    await Task.Run(() => brd.GetVals_Async(brd.AnalogPortsList[0], MainCancelToken));
-                    sw.Stop();
-                    AppendToOutputWindow("*****************************GetVals_Async ----- MilliSeconds: " + sw.ElapsedMilliseconds);
+                    sb.AppendLine("START *************GetVals_Async ***************");
 
                     sw.Restart();
+                    arry1 = await Task.Run(() => SnmpTools.GetVals_Async(brd.DigitalPortsList[0], _ip, MainCancelToken));
+
+                    foreach (string str in arry1)
+                    {
+                         sb.AppendLine("Digi Port1 1 Value: " + str);
+                    }
+
+                    arry2 = await Task.Run(() => SnmpTools.GetVals_Async(brd.DigitalPortsList[1], _ip, MainCancelToken));
+
+                    foreach (string str in arry2)
+                    {
+                         sb.AppendLine("Digi Port1 2 Value: " + str);
+                    }
+                    arry3 = await Task.Run(() => SnmpTools.GetVals_Async(brd.AnalogPortsList[0], _ip, MainCancelToken));
+
+                    foreach (string str in arry3)
+                    {
+                         sb.AppendLine("Analog Port1 1 Value: " + str);
+                    }
+
+                    sw.Stop();
+                    sb.AppendLine("*************GetVals_Async ----- MilliSeconds: " + sw.ElapsedMilliseconds);
+
+
+                    sb.AppendLine("START *************InitGetValues_AsyncRetry ***************");
+                    sw3.Restart();
                     await Task.Run(() => brd.InitGetValues_AsyncRetry(MainCancelToken));
-                    sw.Stop();
-                    AppendToOutputWindow("*****************************InitGetValues_AsyncRetry ----- MilliSeconds: " + sw.ElapsedMilliseconds);
+                    sw3.Stop();
+                    sb.AppendLine("************************InitGetValues_AsyncRetry ----- MilliSeconds: " + sw3.ElapsedMilliseconds);
 
-                    sw.Restart();
+
+                    sb.AppendLine("START *************GetInitialValues_Async ***************");
+                    sw4.Restart();
                     await Task.Run(() => brd.GetInitialValues_Async(MainCancelToken));
-                    sw.Stop();
-                    AppendToOutputWindow("*****************************GetInitialValues_Async ----- MilliSeconds: " + sw.ElapsedMilliseconds);
+                    sw4.Stop();
+                    sb.AppendLine("***********************GetInitialValues_Async ----- MilliSeconds: " + sw4.ElapsedMilliseconds);
 
-                    sw.Restart();
 
-                    IEnumerable<Channel> DigLst1 = new List<Channel>();
-                    IEnumerable<Channel> DigLst2 = new List<Channel>();
-                    IEnumerable<Channel> AlgLst1 = new List<Channel>();
+                    sb.AppendLine("START *************AllChannelsInParallelNonBlockingAsync ***************");
+                    sw5.Restart();
 
-                    DigLst1 = await Task.Run(() => brd.AllChannelsInParallelNonBlockingAsync(brd.DigitalPortsList[0], MainCancelToken));
-                    DigLst2 = await Task.Run(() => brd.AllChannelsInParallelNonBlockingAsync(brd.DigitalPortsList[1], MainCancelToken));
-                    AlgLst1 = await Task.Run(() => brd.AllChannelsInParallelNonBlockingAsync(brd.AnalogPortsList[0], MainCancelToken));
-                    sw.Stop();
+                    DigLst1 = await Task.Run(() => SnmpTools.AllChannelsInParallelNonBlockingAsync(brd.DigitalPortsList[0], MainCancelToken));
+                    foreach (Channel ch in DigLst1)
+                         sb.AppendLine("Digital List1 : Value " + ch.Value);
 
-                    AppendToOutputWindow("*****************************AllChannelsInParallelNonBlockingAsync ----- MilliSeconds: " + sw.ElapsedMilliseconds);
+                    DigLst2 = await Task.Run(() => SnmpTools.AllChannelsInParallelNonBlockingAsync(brd.DigitalPortsList[1], MainCancelToken));
 
-                    sw.Restart();
-                    await Task.Run(() => brd.GetInitialValues_Parallel(MainCancelToken));
-                    sw.Stop();
-                    AppendToOutputWindow("*****************************GetInitialValues_Parallel ----- MilliSeconds: " + sw.ElapsedMilliseconds);
+                    foreach (Channel ch in DigLst2)
+                         sb.AppendLine("Digital List2 : Value " + ch.Value);
+
+                    AlgLst1 = await Task.Run(() => SnmpTools.AllChannelsInParallelNonBlockingAsync(brd.AnalogPortsList[0], MainCancelToken));
+
+                    foreach (Channel ch in AlgLst1)
+                         sb.AppendLine("Analog List1 : Value " + ch.Value);
+
+                    sw5.Stop();
+
+                    sb.AppendLine("************************AllChannelsInParallelNonBlockingAsync ----- MilliSeconds: " + sw5.ElapsedMilliseconds);
+
+                    sw6.Restart();
+                    string eres = await Task.Run(() => brd.GetInitialValues_Parallel(MainCancelToken));
+                    sb.AppendLine(eres);
+                    sw6.Stop();
+                    sb.AppendLine("*****************************GetInitialValues_Parallel ----- MilliSeconds: " + sw6.ElapsedMilliseconds);
+
+                    sb.AppendLine("START*************************** SnmpGet_AsyncCallback -------------------");
+                    sw7.Restart();
+
+                    DigLst1 = await Task.Run(() => SnmpTools.AllChannelsInParallelNonBlockingAsync(brd.DigitalPortsList[0], MainCancelToken));
+                    foreach (Channel ch in DigLst1)
+                    {
+                         res = await SnmpTools.SnmpGet_AsyncCallback(ch, _ip, MainCancelToken);
+                         sb.AppendLine("Digital List1 : " + res);
+                    }
+
+                    DigLst2 = await Task.Run(() => SnmpTools.AllChannelsInParallelNonBlockingAsync(brd.DigitalPortsList[1], MainCancelToken));
+
+                    foreach (Channel ch in DigLst2)
+                    {
+                         res = await SnmpTools.SnmpGet_AsyncCallback(ch, _ip, MainCancelToken);
+                         sb.AppendLine("Digital List2 : " + res);
+                    }
+
+                    AlgLst1 = await Task.Run(() => SnmpTools.AllChannelsInParallelNonBlockingAsync(brd.AnalogPortsList[0], MainCancelToken));
+
+                    foreach (Channel ch in AlgLst1)
+                    {
+                         res = await SnmpTools.SnmpGet_AsyncCallback(ch, _ip, MainCancelToken);
+                         sb.AppendLine("Analog List1 : Value " + ch.Value);
+                    }
+
+                    sw7.Stop();
+                    sb.AppendLine("SnmpGet_AsyncCallback DONE ----- MilliSeconds: " + sw7.ElapsedMilliseconds);
                }
                catch (AggregateException ae)
                {
-                    onEthernetBoardError_Async(sender, new AsyncErrorEventArgs(ae));
-                    Debug.Print("AggregateException " + sender.ToString());
+                    onEthernetBoardError_Async(this, new AsyncErrorEventArgs(ae));
+                    Debug.Print("AggregateException " + ae.Flatten().ToString());
                }
                catch (Exception ex)
                {
-                    onEthernetBoardError(sender, new ErrorEventArgs(ex));
-                    Debug.Print("Exception " + sender.ToString());
+                    onEthernetBoardError(this, new ErrorEventArgs(ex));
+                    Debug.Print("Exception " + ex.ToString());
                }
+
+               return sb.ToString();
           }
 
           private void btnCancelAllTasks_Click(object sender, EventArgs e)
           {
-
+               MainCancelTokenSource.Cancel();
           }
 
           private async void btnDoGetAll_Click(object sender, EventArgs e)
+          {
+               await DoGetAll();
+          }
+
+
+          private async Task DoGetAll()
           {
                string _ip = txtToIP.Text.Trim();
 
                EthernetBoard brd = new EthernetBoard(0, txtToIP.Text);
 
-               await Task.Run(() => brd.init(0, "Board 40", _ip, 161, "private", 50, 100, true, false));
+               await Task.Run(() => brd.init("Board 0", 161, "private", 50, 100, true, true));
 
                sw.Restart();
 
-               await Task.Run(() => brd.GetInitialValues_Async(MainCancelToken));
+               IList<Variable> l1 = await SnmpTools.SnmpGetAll(EthernetBoardPortNo.DIGITAL_PORT_1, _ip);
+               Debug.Print("1. Get All Results: " + l1.Select(c => c.Data.ToString()));
 
-               IList<Variable> l1 = brd.SnmpGetAll(EthernetBoardPortNo.DIGITAL_PORT_1);
-               IList<Variable> l2 = brd.SnmpGetAll(EthernetBoardPortNo.DIGITAL_PORT_2);
-               IList<Variable> l3 = brd.SnmpGetAll(EthernetBoardPortNo.ADC_PORT_1);
+               IList<Variable> l2 = await SnmpTools.SnmpGetAll(EthernetBoardPortNo.DIGITAL_PORT_2, _ip);
+               Debug.Print("2. Get All Results: " + l2.Select(c => c.Data.ToString()));
+
+               IList<Variable> l3 = await SnmpTools.SnmpGetAll(EthernetBoardPortNo.ADC_PORT_1, _ip);
+               Debug.Print("3. Get All Results: " + l3.Select(c => c.Data.ToString()));
 
                sw.Stop();
-               
-               foreach(Variable v in l1)
-               {
-                    AppendToOutputWindow("Dig 1 - Channel Result : " + v.Data.ToString());
-               }
-
-               foreach (Variable v in l2)
-               {
-                    AppendToOutputWindow("Dig 2 - Channel Result : " + v.Data.ToString());
-               }
-
-               foreach (Variable v in l3)
-               {
-                    AppendToOutputWindow("Alg 1 - Channel Result : " + v.Data.ToString());
-               }
 
                AppendToOutputWindow("*****************************SnmpGetAll ----- MilliSeconds: " + sw.ElapsedMilliseconds);
           }
-
-          private void btnGetTpl1_Click(object sender, EventArgs e)
+          private void btnDoSetAll_Click(object sender, EventArgs e)
           {
+               DoSetAll();
+          }
 
+          private async Task DoSetAll()
+          {
+               int ON = 1;
+               int OFF = 0;
+               string pIp = "192.168.1.40";
+               IList<Variable> lstRes = null;
+
+               try
+               {
+                    lstRes = await Task.Run(() =>
+                            SnmpTools.SnmpSetAll(EthernetBoardPortNo.DIGITAL_PORT_1, ON, pIp, MainCancelToken));
+                    Debug.Print("Set All Results: " + lstRes.Select(c => c.Data.ToString()));
+                    lstRes = await Task.Run(() =>
+                            SnmpTools.SnmpSetAll(EthernetBoardPortNo.DIGITAL_PORT_2, ON, pIp, MainCancelToken));
+                    Debug.Print("Results: " + lstRes.Select(c => c.Data.ToString()));
+                    lstRes = await Task.Run(() =>
+                            SnmpTools.SnmpSetAll(EthernetBoardPortNo.ADC_PORT_1, ON, pIp, MainCancelToken));
+                    Debug.Print("Results: " + lstRes.Select(c => c.Data.ToString()));
+
+                    //lstRes = await Task.Run(() =>
+                    //        EthernetBoard_2.SnmpSetAll(EthernetBoardPortNo.DIGITAL_PORT_1,
+                    //        ON, MainCancelToken));
+                    //Debug.Print("Results: " + lstRes.Select(c => c.Data.ToString()));
+                    //lstRes = await Task.Run(() =>
+                    //        EthernetBoard_3.SnmpSetAll(EthernetBoardPortNo.DIGITAL_PORT_1,
+                    //        ON, MainCancelToken));
+                    //Debug.Print("Results: " + lstRes.Select(c => c.Data.ToString()));
+                    //lstRes = await Task.Run(() =>
+                    //        EthernetBoard_4.SnmpSetAll(EthernetBoardPortNo.DIGITAL_PORT_1,
+                    //        ON, MainCancelToken));
+                    //Debug.Print("Results: " + lstRes.Select(c => c.Data.ToString()));
+               }
+               catch (AggregateException ae)
+               {
+                    onEthernetBoardError_Async(this, new AsyncErrorEventArgs(ae));
+                    Debug.Print("AggregateException" + ae.Flatten().Message);
+               }
+               catch (Exception ex)
+               {
+                    onEthernetBoardError(this, new ErrorEventArgs(ex));
+                    Debug.Print("Exception " + ex.Message);
+               }
+
+          }
+          private async void btnCompareSets_Click(object sender, EventArgs e)
+          {
+               string windowText = await CompareSets();
+               AppendToOutputWindow(windowText);
+          }
+
+          private async Task<string> CompareSets()
+          {
+               StringBuilder sb = new StringBuilder();
+
+               IEnumerable<Channel> DigLst1 = new List<Channel>();
+               IEnumerable<Channel> DigLst2 = new List<Channel>();
+               IEnumerable<Channel> AlgLst1 = new List<Channel>();
+               List<string> getRes1 = new List<string>();
+               int newVal;
+               IList<Variable> lstV;
+
+               string st = null;
+               string _ip = txtToIP.Text.Trim();
+
+               EthernetBoard brd = new EthernetBoard(0, txtToIP.Text);
+
+               await Task.Run(() => brd.init("Board 0", 161, "private", 50, 100, true, true));
+
+               try
+
+               {
+                    sb.AppendLine("*********SnmpSet_Async ********************************");
+
+                    sw.Restart();
+                    foreach (Channel ch in brd.DigitalPortsList[0].ChannelsList)
+                    {
+                         newVal = (ch.Value == 0 ? 1 : 0);
+                         st = await SnmpTools.SnmpSet_Async(ch.OID, newVal, _ip, MainCancelToken);
+                         sb.AppendLine(st);
+                    }
+
+                    foreach (Channel ch in brd.DigitalPortsList[1].ChannelsList)
+                    {
+                         newVal = (ch.Value == 0 ? 1 : 0);
+                         st = await SnmpTools.SnmpSet_Async(ch.OID, newVal, _ip, MainCancelToken);
+                         sb.AppendLine(st);
+                    }
+
+                    foreach (Channel ch in brd.AnalogPortsList[0].ChannelsList)
+                    {
+                         newVal = (ch.Value == 0 ? 1 : 0);
+                         st = await SnmpTools.SnmpSet_Async(ch.OID, newVal, _ip, MainCancelToken);
+                         sb.AppendLine(st);
+                    }
+                    sw.Stop();
+                    sb.AppendLine("*********SnmpSet_Async ----- MilliSeconds: " + sw.ElapsedMilliseconds);
+
+                    sb.AppendLine("START *********DoSomeSets_ParallelAsync ********************************");
+                    sw2.Restart();
+
+                    st = await SnmpTools.SnmpSetAll_ParallelAsync(1, "192.168.1.40", brd.DigitalPortsList[0], MainCancelToken);
+                    sw2.Stop();
+                    sb.AppendLine(st);
+                    sb.AppendLine("*********DoSomeSets_ParallelAsync ----- MilliSeconds: " + sw2.ElapsedMilliseconds);
+
+                    sb.AppendLine("START *********SnmpSet ********************************");
+                    sw3.Restart();
+
+                    foreach (Channel ch in brd.DigitalPortsList[0].ChannelsList)
+                    {
+                         newVal = (ch.Value == 0 ? 1 : 0);
+                         st = SnmpTools.SnmpSet(ch.OID, _ip, newVal, MainCancelToken);
+                         sb.AppendLine(st);
+                    }
+
+                    foreach (Channel ch in brd.DigitalPortsList[1].ChannelsList)
+                    {
+                         newVal = (ch.Value == 0 ? 1 : 0);
+                         st = SnmpTools.SnmpSet(ch.OID, _ip, newVal, MainCancelToken);
+                         sb.AppendLine(st);
+                    }
+
+                    foreach (Channel ch in brd.AnalogPortsList[0].ChannelsList)
+                    {
+                         newVal = (ch.Value == 0 ? 1 : 0);
+                         st = SnmpTools.SnmpSet(ch.OID, _ip, newVal, MainCancelToken);
+                         sb.AppendLine(st);
+                    }
+
+                    sw3.Stop();
+                    sb.AppendLine(st);
+                    sb.AppendLine("*********SnmpSet ----- MilliSeconds: " + sw3.ElapsedMilliseconds);
+
+                    sb.AppendLine("START *********SnmpSetAll ********************************");
+                    sw4.Restart();
+                    newVal = 1;
+                    lstV = await SnmpTools.SnmpSetAll(EthernetBoardPortNo.DIGITAL_PORT_1, newVal, _ip, MainCancelToken);
+                    foreach (Variable v in lstV)
+                    {
+                         sb.AppendLine("BOARD 1 - ID: " + v.Id + " Value : " + v.Data);
+                    }
+
+                    lstV = await SnmpTools.SnmpSetAll(EthernetBoardPortNo.DIGITAL_PORT_2, newVal, _ip, MainCancelToken);
+                    foreach (Variable v in lstV)
+                    {
+                         sb.AppendLine("BOARD 2 - ID: " + v.Id + " Value : " + v.Data);
+                    }
+
+                    lstV = await SnmpTools.SnmpSetAll(EthernetBoardPortNo.ADC_PORT_1, newVal, _ip, MainCancelToken);
+                    foreach (Variable v in lstV)
+                    {
+                         sb.AppendLine("BOARD ANALOG 1 - ID: " + v.Id + " Value : " + v.Data);
+                    }
+                    sw4.Stop();
+                    sb.AppendLine("*********SnmpSetAll ----- MilliSeconds: " + sw4.ElapsedMilliseconds);
+               }
+               catch (AggregateException ae)
+               {
+                    onEthernetBoardError_Async(this, new AsyncErrorEventArgs(ae));
+                    Debug.Print("AggregateException " + ae.Flatten().ToString());
+               }
+               catch (Exception ex)
+               {
+                    if (!(ex is Lextm.SharpSnmpLib.Messaging.TimeoutException)
+                        && !(ex is SocketException)
+                        && !(ex is OperationCanceledException)
+                        && !(ex is TaskCanceledException))
+                    {
+                         onEthernetBoardError(this, new ErrorEventArgs(ex));
+                         Debug.Print("Exception " + ex.ToString());
+                    }
+               }
+
+               return sb.ToString();
+          }
+
+          private void toolStripMenuItem1_Click(object sender, EventArgs e)
+          {
+               PowerSnmpAgent frm = new PowerSnmpAgent();
+               frm.Show();
           }
      }
 }

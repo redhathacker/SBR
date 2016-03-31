@@ -87,7 +87,7 @@ namespace snmpd
           {
                get
                {
-                    throw new NotImplementedException();
+                    return _ports.Length;
                }
           }
      }

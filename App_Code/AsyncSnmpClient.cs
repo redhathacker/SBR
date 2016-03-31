@@ -22,7 +22,7 @@ namespace snmpd
     }
 
 
-    class AsyncSnmpClient
+    class AsyncSnmpClient : IDisposable
     {
         Socket _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         SocketPermission _permission = new SocketPermission(NetworkAccess.Accept, TransportType.Udp, "", 161);
@@ -185,5 +185,10 @@ namespace snmpd
                 Debug.Print(e.ToString());
             }
         }
-    }
+
+          public void Dispose()
+          {
+               ((IDisposable)_socket).Dispose();
+          }
+     }
 }

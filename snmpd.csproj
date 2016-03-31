@@ -62,6 +62,7 @@
     <CodeAnalysisRuleSetDirectories>;C:\Program Files\Microsoft Visual Studio 10.0\Team Tools\Static Analysis Tools\\Rule Sets</CodeAnalysisRuleSetDirectories>
     <CodeAnalysisRuleDirectories>;C:\Program Files\Microsoft Visual Studio 10.0\Team Tools\Static Analysis Tools\FxCop\\Rules</CodeAnalysisRuleDirectories>
     <Prefer32Bit>false</Prefer32Bit>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
     <OutputPath>..\bin\</OutputPath>
@@ -90,6 +91,8 @@
     <Compile Include="App_Code\EthernetBoardPortClass.cs" />
     <Compile Include="App_Code\EthernetBoardTests.cs" />
     <Compile Include="App_Code\EthernetBoardwThreads.cs" />
+    <Compile Include="App_Code\PowerSnmpTools.cs" />
+    <Compile Include="App_Code\SnmpTools.cs" />
     <Compile Include="App_Code\TaskTools.cs" />
     <Compile Include="App_Code\ThreadManager.cs" />
     <Compile Include="App_Code\Utilities.cs" />
@@ -98,6 +101,12 @@
     </Compile>
     <Compile Include="frmPushButtons.Designer.cs">
       <DependentUpon>frmPushButtons.cs</DependentUpon>
+    </Compile>
+    <Compile Include="PowerSnmpAgent.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="PowerSnmpAgent.Designer.cs">
+      <DependentUpon>PowerSnmpAgent.cs</DependentUpon>
     </Compile>
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
@@ -120,6 +129,9 @@
       <DependentUpon>MainForm.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
+    <EmbeddedResource Include="PowerSnmpAgent.resx">
+      <DependentUpon>PowerSnmpAgent.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -133,6 +145,7 @@
     <Reference Include="Crad.Windows.Forms.Actions, Version=1.1.1.0, Culture=neutral, PublicKeyToken=66b0ace6c5875704">
       <HintPath>..\lib\Crad.Windows.Forms.Actions.dll</HintPath>
     </Reference>
+    <Reference Include="Dart.Snmp, Version=4.8.1.0, Culture=neutral, PublicKeyToken=5966291b8955e4bb, processorArchitecture=MSIL" />
     <Reference Include="log4net, Version=1.2.10.0, Culture=neutral, PublicKeyToken=1b44e1d426115821">
       <HintPath>..\lib\log4net.dll</HintPath>
     </Reference>

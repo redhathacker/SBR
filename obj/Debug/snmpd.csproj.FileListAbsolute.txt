@@ -66,3 +66,8 @@ C:\Users\ninja\Documents\Programming Stuff\Freelancer_com\Aussie Rorie\snmpd\bin
 C:\Users\ninja\Documents\Programming Stuff\Freelancer_com\Aussie Rorie\snmpd\bin\Debug\SharpSnmpLib.Mib.xml
 C:\Users\ninja\Documents\Programming Stuff\Freelancer_com\Aussie Rorie\snmpd\bin\Debug\SmartThreadPool.pdb
 C:\Users\ninja\Documents\Programming Stuff\Freelancer_com\Aussie Rorie\snmpd\obj\Debug\snmpd.csprojResolveAssemblyReference.cache
+C:\Users\ninja\Documents\Programming Stuff\Freelancer_com\Aussie Rorie\snmpd\bin\Debug\Dart.Snmp.dll
+C:\Users\ninja\Documents\Programming Stuff\Freelancer_com\Aussie Rorie\snmpd\bin\Debug\Dart.Snmp.xml
+C:\Users\ninja\Documents\Programming Stuff\Freelancer_com\Aussie Rorie\snmpd\obj\Debug\snmpd.PowerSnmpAgent.resources
+C:\Users\ninja\Documents\Programming Stuff\Freelancer_com\Aussie Rorie\snmpd\bin\Debug\snmpd.exe.CodeAnalysisLog.xml
+C:\Users\ninja\Documents\Programming Stuff\Freelancer_com\Aussie Rorie\snmpd\bin\Debug\snmpd.exe.lastcodeanalysissucceeded

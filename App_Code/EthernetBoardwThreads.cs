@@ -408,6 +408,7 @@ namespace snmpd
                     Marshal.FreeHGlobal(nativeResource);
                     nativeResource = IntPtr.Zero;
                }
+               Dispose(false);
           }
 
           public void Dispose()
@@ -415,7 +416,7 @@ namespace snmpd
                DigitalTimer.Dispose();
                AnalogTimer.Dispose();
 
-               GC.ReRegisterForFinalize(this);
+               GC.SuppressFinalize(this);
           }
 
           # endregion

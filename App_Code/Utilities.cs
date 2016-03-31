@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Text;
 using Lextm.SharpSnmpLib.Messaging;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace snmpd
 {
@@ -10,10 +12,62 @@ namespace snmpd
      public enum PortMode { INPUT, OUTPUT }
      public enum ChannelState { OFF, ON }
 
-     public class Utilities
+     public static class Utilities
      {
+        public const int LISTEN_PORT = 161;
+        public const int RECEIVE_PORT = 162;
+        public const int DIG_CHAN_START_NO = 1;
+        public const int DIG_CHAN_PER_PORT = 8;
+        public const int ANLG_CHAN_START_NO = 1;
+        public const int ANLG_CHAN_PER_PORT = 4;
+        public const int SNMP_GET_TIMEOUT = 50;
+        public const int SNMP_SET_TIMEOUT = 100;
+        public const int NUMBER_OF_DIGITAL_PORTS = 2;
+        public const int NUMBER_OF_ANALOG_PORTS = 1;
+        public const string COMMUNITY = "private";
 
-     }
+        public const string Board1_IP = "162.198.1.40";
+        public const string Board2_IP = "162.198.1.41";
+        public const string Board3_IP = "162.198.1.42";
+        public const string Board4_IP = "162.198.1.43";
+        public const string Board5_IP = "162.198.1.44";
+        public const string Board6_IP = "162.198.1.45";
+        public const string Board7_IP = "162.198.1.46";
+        public const string Board8_IP = "162.198.1.47";
+
+        public static bool IsRealError(Exception ex)
+        {
+            bool validError = false;
+            
+            if (!(ex is Lextm.SharpSnmpLib.Messaging.TimeoutException)
+                    && !(ex is System.Net.Sockets.SocketException)
+                    && !(ex is OperationCanceledException)
+                    && !(ex is TaskCanceledException))
+            {
+                validError = true;
+            }            
+            return validError;
+        }
+
+        public static bool IsRealError(AggregateException ex)
+        {
+            bool validError = false;
+
+            foreach (Exception e in ex.InnerExceptions)
+            {
+                if (!(e is Lextm.SharpSnmpLib.Messaging.TimeoutException)
+                    && !(e is System.Net.Sockets.SocketException)
+                    && !(e is OperationCanceledException)
+                    && !(e is TaskCanceledException))
+                {
+                    validError = true;
+                }
+            }
+
+            return validError;
+        }
+
+    } // End Class
 
      public sealed class ErrorEventArgs : EventArgs
      {
@@ -84,4 +138,5 @@ namespace snmpd
                Get_Response_Message = null;
           }
      }
+
 }

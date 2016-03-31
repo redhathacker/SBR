@@ -403,7 +403,7 @@ namespace snmpd
 
      #region ChannelsEnumerator Class
 
-     public class ChannelsEnumerator : IEnumerator<Channel>
+     public sealed class ChannelsEnumerator : IEnumerator<Channel>
      {
           ChannelsCollection __collection;
           ChannelsCollection __originalCollection;
@@ -424,7 +424,14 @@ namespace snmpd
           {
                __collection = null;
                __originalCollection = null;
+               this.Dispose(true);
           }
+
+          public void Dispose(bool s)
+          {
+               
+          }
+
           public bool MoveNext()
           {
                if (position < __collection.Count)
