@@ -81,7 +81,6 @@ C:\CodeBases\snmpd\obj\Debug\snmpd.PowerSnmpAgent.resources
 C:\CodeBases\snmpd\obj\Debug\snmpd.Properties.Resources.resources
 C:\CodeBases\snmpd\obj\Debug\snmpd.csproj.GenerateResource.Cache
 C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\snmpd.exe.config
-C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\snmpd.XML
 C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\snmpd.exe
 C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\snmpd.pdb
 C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\snmpd.exe.CodeAnalysisLog.xml
@@ -105,4 +104,3 @@ C:\CodeBases\Sports Broadcast Router - Working0\snmpd\obj\Debug\snmpd.Properties
 C:\CodeBases\Sports Broadcast Router - Working0\snmpd\obj\Debug\snmpd.csproj.GenerateResource.Cache
 C:\CodeBases\Sports Broadcast Router - Working0\snmpd\obj\Debug\snmpd.exe
 C:\CodeBases\Sports Broadcast Router - Working0\snmpd\obj\Debug\snmpd.pdb
-C:\CodeBases\Sports Broadcast Router - Working0\snmpd\obj\Debug\snmpd.csprojResolveAssemblyReference.cache

@@ -169,16 +169,6 @@ namespace snmpd
             });
         }
 
-        private void StartBoardListeners()
-        {
-            tskBrd1 = Task.Factory.StartNew(() => RelayBoards.ElementAt(0).StartDigitalPolling(), 
-                MainCancelToken, TaskCreationOptions.LongRunning,
-                TaskScheduler.Current);
-
-  
-            SetOnOffLabel(true);
-        }
-
         //********************* Random Functions **********************
         private void SetOnOffLabel(bool boardsAreOn)
         {
