@@ -202,11 +202,11 @@ namespace snmpd
           IPAddress IP { get { return _IP; } }
           BoardState ConnectionState { get { return _ConnectionState; } }
 
-          private List<EthernetBoardPortwThreads> _DigitalPortsList;
-          private List<EthernetBoardPortwThreads> _AnalogPortsList;
+          private List<EthernetBoardPortwThreads> _DigitalPorts;
+          private List<EthernetBoardPortwThreads> _AnalogPorts;
 
-          public List<EthernetBoardPortwThreads> DigitalPortsList { get { return _DigitalPortsList; } }
-          public List<EthernetBoardPortwThreads> AnalogPortsList { get { return _AnalogPortsList; } }
+          public List<EthernetBoardPortwThreads> DigitalPorts { get { return _DigitalPorts; } }
+          public List<EthernetBoardPortwThreads> AnalogPorts { get { return _AnalogPorts; } }
 
           // Analog timer values
           private int _AnalogInputRefreshInMs = -1;
@@ -224,7 +224,11 @@ namespace snmpd
           public EthernetBoardPortwThreads IoPort1;
           public EthernetBoardPortwThreads IoPort2;
 
-          private IntPtr nativeResource = Marshal.AllocHGlobal(100);
+        private CancellationTokenSource CancelTokenSource = null;
+        private CancellationToken GlobalCancelToken;
+
+
+        private IntPtr nativeResource = Marshal.AllocHGlobal(100);
 
           # endregion
 
@@ -232,10 +236,13 @@ namespace snmpd
 
           public EthernetBoardwThreads()
           {   // store the current channel values for comparison when checking for new data
-               _DigitalPortsList = new List<EthernetBoardPortwThreads>();
-               _AnalogPortsList = new List<EthernetBoardPortwThreads>();
+               _DigitalPorts = new List<EthernetBoardPortwThreads>();
+               _AnalogPorts = new List<EthernetBoardPortwThreads>();
 
-               IoPort1 = new EthernetBoardPortwThreads();
+            CancelTokenSource = new CancellationTokenSource();
+            GlobalCancelToken = CancelTokenSource.Token;
+
+            IoPort1 = new EthernetBoardPortwThreads();
                IoPort1.IsAnalog = false;
                IoPort1.Mode = PortMode.INPUT;
                IoPort1.PortNo = 0;
@@ -314,17 +321,17 @@ namespace snmpd
 
                IoPort1.ParentIP = this.IP;
                IoPort1.ParentId = this.BoardID;
-               _DigitalPortsList.Add(IoPort1);
+               _DigitalPorts.Add(IoPort1);
 
                IoPort2.ParentIP = this.IP;
                IoPort2.ParentId = this.BoardID;
-               _DigitalPortsList.Add(IoPort2);
+               _DigitalPorts.Add(IoPort2);
 
                if (BoardID == 0 || BoardID == 4)
                {
                     AdcPort1.ParentIP = this.IP;
                     AdcPort1.ParentId = this.BoardID;
-                    _AnalogPortsList.Add(AdcPort1);
+                    _AnalogPorts.Add(AdcPort1);
                }
 
                _ConnectionState = BoardState.CONNECTED;
@@ -335,7 +342,7 @@ namespace snmpd
                success = true;
 
                if (onInit != null)
-                    onInit(this.BoardID, this.DigitalPortsList, this.AnalogPortsList);
+                    onInit(this.BoardID, this.DigitalPorts, this.AnalogPorts);
 
                //if (onLoggingRaised != null)
                //    onLoggingRaised("Initialized GPIO Ethernet Board with ID : " + _BoardID.ToString()
@@ -408,7 +415,7 @@ namespace snmpd
                     Marshal.FreeHGlobal(nativeResource);
                     nativeResource = IntPtr.Zero;
                }
-               Dispose(false);
+              // Dispose(false);
           }
 
           public void Dispose()
@@ -480,11 +487,11 @@ namespace snmpd
                     }
                     else
                     {
-                         LogStuff("Error setting Digital Values for Ethernet Board Name : "
-                              + this.BoardName + " Message: " + ex.Message);
+                         //LogStuff("Error setting Digital Values for Ethernet Board Name : "
+                         //     + this.BoardName + " Message: " + ex.Message);
 
-                         if (onError != null)
-                              onError(this, new ErrorEventArgs(ex));
+                         //if (onError != null)
+                         //     Application onError(this, new ErrorEventArgs(ex));
                     }
                }
 
@@ -585,7 +592,7 @@ namespace snmpd
                if (task_DigitalTimer == null || task_DigitalTimer.IsCompleted)
                {
                     task_DigitalTimer = Task.Factory.StartNew(()
-                        => CheckForNewDigitalData(DigitalPortsList));
+                        => CheckForNewDigitalData(DigitalPorts));
                }
                else
                {
@@ -598,7 +605,7 @@ namespace snmpd
                if (task_AnalogTimer == null || task_AnalogTimer.IsCompleted)
                {
                     task_AnalogTimer = Task.Factory.StartNew(()
-                        => CheckForNewAnalogData(AnalogPortsList));
+                        => CheckForNewAnalogData(AnalogPorts));
                }
                else
                {
@@ -678,7 +685,7 @@ namespace snmpd
                }
 
                if (onInit != null)
-                    onInit(BoardID, DigitalPortsList, AnalogPortsList);
+                    onInit(BoardID, DigitalPorts, AnalogPorts);
           }
 
           private async void CheckForNewDigitalData(object state)
@@ -772,7 +779,7 @@ namespace snmpd
 
                //******************************* SCAN PORT *******************************************//
                // check each channel in the port for updated data (button values)                     //
-               // Compare it to AnalogPortsList list. Update list if new values are found              //
+               // Compare it to AnalogPorts list. Update list if new values are found              //
                //*************************************************************************************//
 
                foreach (EthernetBoardPortwThreads port in lstBrd)
@@ -1064,7 +1071,7 @@ namespace snmpd
           }
 
           // Uses calls to static functions
-          private async void CheckForNewDigitalData2()
+          private async Task CheckForNewDigitalData2()
           {
                Stopwatch sw = new Stopwatch();
                sw.Start();
@@ -1077,7 +1084,7 @@ namespace snmpd
                // Compare it to CurrentDigitalChannelValues list. Update list if new values are found //
                //*************************************************************************************//           
 
-               foreach (EthernetBoardPortwThreads pt in this.DigitalPortsList)
+               foreach (EthernetBoardPortwThreads pt in this.DigitalPorts)
                {
                     foreach (EthernetBoardPortwThreads.Channel ch in pt.channels)
                     {
@@ -1085,12 +1092,12 @@ namespace snmpd
 
                          try
                          {
-                              result = await Task.Factory.StartNew(() =>
-                                  SnmpGet(ch, pt.ParentIP, pt.PortNo, SNMP_GET_TIMEOUT));
+                              result = Task.Run(() =>
+                                  SnmpTools.SnmpGet_Async(ch.OID, pt.ParentIP.ToString(), GlobalCancelToken));
 
-                              Task.WaitAny(result);
+                            await result;
 
-                              if (result.Result.Equals(TaskStatus.RanToCompletion))
+                              if (result.Equals(TaskStatus.RanToCompletion))
                               {
                                    if (int.TryParse(result.Result, out NewChannelValue))
                                    {
@@ -1098,18 +1105,17 @@ namespace snmpd
                                         {
                                              try
                                              {   // write new value 
-                                                  result = await Task.Factory.StartNew(()
-                                                      => SnmpSet(ch, pt.ParentIP, pt.PortNo, NewChannelValue));
+                                                  result = Task.Run(()
+                                                      => SnmpTools.SnmpSet_Async(ch.OID, NewChannelValue, pt.ParentIP.ToString(), GlobalCancelToken));
 
                                                   ch.Value = NewChannelValue;
 
-                                                  // do user interface stuff 
-                                                  if (onDigitalInput != null)
-                                                       onDigitalInput(pt.ParentId, pt.PortNo, ch);
+                                                // do user interface stuff 
+                                                onDigitalInput?.Invoke(pt.ParentId, pt.PortNo, ch);
 
-                                                  //Task.WaitAny(result);
+                                                //Task.WaitAny(result);
 
-                                                  Debug.Print(sw.Elapsed + " digitalInputGetAll - After onDigitalInput");
+                                                Debug.Print(sw.Elapsed + " digitalInputGetAll - After onDigitalInput");
                                              }
                                              catch (Exception ex)
                                              {
@@ -1133,71 +1139,71 @@ namespace snmpd
           }
 
           // Uses calls to static functions
-          private async void CheckForNewAnalogData2()
-          {
-               Task<string> result;
-               int NewChannelValue;
+          //private async Task CheckForNewAnalogData2()
+          //{
+          //     Task<string> result;
+          //     int NewChannelValue;
 
-               Stopwatch sw = new Stopwatch();
-               sw.Start();
+          //     Stopwatch sw = new Stopwatch();
+          //     sw.Start();
 
-               //******************************* SCAN PORT *******************************************//
-               // check each channel in the port for updated data (button values)                     //
-               // Compare it to AnalogPortsList list. Update list if new values are found              //
-               //*************************************************************************************//
+          //     //******************************* SCAN PORT *******************************************//
+          //     // check each channel in the port for updated data (button values)                     //
+          //     // Compare it to AnalogPorts list. Update list if new values are found              //
+          //     //*************************************************************************************//
 
-               foreach (EthernetBoardPortwThreads port in this.AnalogPortsList)
-               {
-                    foreach (EthernetBoardPortwThreads.Channel channel in port.channels)
-                    {
-                         result = null;
-                         try
-                         {
-                              result = await Task.Factory.StartNew(() =>
-                                  SnmpGet(channel, port.ParentIP, port.PortNo, SNMP_GET_TIMEOUT));
+          //     foreach (EthernetBoardPortwThreads port in this.AnalogPorts)
+          //     {
+          //          foreach (EthernetBoardPortwThreads.Channel channel in port.channels)
+          //          {
+          //               result = null;
+          //               try
+          //               {
+          //                    result = Task.Run(() =>
+          //                        SnmpTools.GetVals_Async(port, port.ParentIP, GlobalCancelToken));
 
-                              Task.WaitAny(result);
+          //                    Task.WaitAny(result);
 
-                              if (result.Result.Equals(TaskStatus.RanToCompletion))
-                              {
-                                   if (int.TryParse(result.Result, out NewChannelValue))
-                                   {
-                                        if (NewChannelValue != channel.Value) // Light is on!!
-                                        {
-                                             try
-                                             {   // write new value 
-                                                  result = await Task.Factory.StartNew(()
-                                                      => SnmpSet(channel, port.ParentIP, port.PortNo, NewChannelValue));
+          //                    if (result.Result.Equals(TaskStatus.RanToCompletion))
+          //                    {
+          //                         if (int.TryParse(result.Result, out NewChannelValue))
+          //                         {
+          //                              if (NewChannelValue != channel.Value) // Light is on!!
+          //                              {
+          //                                   try
+          //                                   {   // write new value 
+          //                                        result = await Task.Factory.StartNew(()
+          //                                            => SnmpSet(channel, port.ParentIP, port.PortNo, NewChannelValue));
 
-                                                  channel.Value = NewChannelValue;
+          //                                        channel.Value = NewChannelValue;
 
-                                                  if (onAnalogInput != null)
-                                                       onAnalogInput(port.ParentId, port.PortNo, channel);
+          //                                        if (onAnalogInput != null)
+          //                                             onAnalogInput(port.ParentId, port.PortNo, channel);
 
-                                                  Task.WaitAny(result);
+          //                                        Task.WaitAny(result);
 
-                                                  Debug.Print(sw.Elapsed + "analogInputGetAll - After onAnalogInput");
-                                             }
-                                             catch (Exception ex)
-                                             {
-                                                  HandleErrors(ex);
-                                             }
-                                        }
-                                   }
-                              }
-                         }
-                         catch (Exception ex)
-                         {
-                              HandleErrors(ex);
-                         }
-                    }
-               }
+          //                                        Debug.Print(sw.Elapsed + "analogInputGetAll - After onAnalogInput");
+          //                                   }
+          //                                   catch (Exception ex)
+          //                                   {
+          //                                        HandleErrors(ex);
+          //                                   }
+          //                              }
+          //                         }
+          //                    }
+          //               }
+          //               catch (Exception ex)
+          //               {
+          //                    HandleErrors(ex);
+          //               }
+          //          }
+          //     }
 
-               task_AnalogTimer.Dispose();
+          //     task_AnalogTimer.Dispose();
 
-               sw.Stop();
-               Debug.Print("Time Elapsed in CheckForNewAnalogData: " + sw.Elapsed);
-          }
+          //     sw.Stop();
+          //     Debug.Print("Time Elapsed in CheckForNewAnalogData: " + sw.Elapsed);
+          //}
 
           // STATIC 
           public static async Task<string> SnmpSet(EthernetBoardPortwThreads.Channel ch, IPAddress ip, int pt, int _NewChannelValue)

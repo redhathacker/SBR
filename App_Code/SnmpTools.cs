@@ -2,6 +2,7 @@
 using System.Net;
 using System.Diagnostics;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -24,18 +25,18 @@ namespace snmpd
         {
             IList<Variable> result = null;
             IList<Variable> argsIn = new List<Variable> { new Variable(OID) };
-            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Utilities.LISTEN_PORT);
+            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Util.LISTEN_PORT);
             string retVal;
 
             try
             {
                 result = Messenger.Get(VersionCode.V1, Ep,
-                     new OctetString(Utilities.COMMUNITY),
-                     argsIn, Utilities.SNMP_GET_TIMEOUT);
+                     new OctetString(Util.COMMUNITY),
+                     argsIn, Util.SNMP_GET_TIMEOUT);
             }
             catch (Exception ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Message);
                     throw;
@@ -60,7 +61,7 @@ namespace snmpd
             IList<Variable> result = null;
             ObjectIdentifier _oid;
             List<Variable> lstVar = new List<Variable>();
-            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Utilities.LISTEN_PORT);
+            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Util.LISTEN_PORT);
 
             switch (pPortToScan)
             {
@@ -100,13 +101,13 @@ namespace snmpd
             try
             {
                 result = await Task.Run(() => Messenger.Get(VersionCode.V1, Ep,
-                     new OctetString(Utilities.COMMUNITY), lstVar, 1000));
+                     new OctetString(Util.COMMUNITY), lstVar, 1000));
 
                 Debug.Print("GETALL: Result Id: " + result.Select(v => v.Id) + " Data: " + result.Select(v => v.Id));
             }
             catch (AggregateException ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions.Select(er => er.Message));
                     throw;
@@ -114,7 +115,7 @@ namespace snmpd
             }
             catch (Exception ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Message);
                     throw;
@@ -136,7 +137,7 @@ namespace snmpd
         {
             IList<Variable> result = null;
             string retVal;
-            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Utilities.LISTEN_PORT);
+            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Util.LISTEN_PORT);
 
             ct.ThrowIfCancellationRequested();
 
@@ -146,27 +147,26 @@ namespace snmpd
                 await Task.Factory.StartNew(() =>
                 {
                     result = Messenger.Get(VersionCode.V1,
-                        Ep, new OctetString(Utilities.COMMUNITY),
-                        new List<Variable> { new Variable(pOid) }, Utilities.SNMP_GET_TIMEOUT);
-
+                        Ep, new OctetString(Util.COMMUNITY),
+                        new List<Variable> { new Variable(pOid) }, Util.SNMP_GET_TIMEOUT);
+                    Debug.Print("SnmpGet_Async: " + pOid);
                 }, ct, TaskCreationOptions.DenyChildAttach, TaskScheduler.Default).ConfigureAwait(false);
             }
-            catch (AggregateException ex)
+            catch (AggregateException aex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(aex))
                 {
-                    Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions.Select(er => er.Message));
                     throw;
                 }
             }
             catch (Exception ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
-                    Debug.Print("Unhandled Error: " + ex.Message);
                     throw;
                 }
             }
+
             if (result != null && result.Count > 0)
                 retVal = result[0].Data.ToString();
             else
@@ -175,14 +175,16 @@ namespace snmpd
             return retVal;
         }
 
-  
+
+
+
         /// <summary>
         /// Retrieves values from an EndPoint (Ip, Port) 
         /// </summary>
         /// <returns>(List) of type Variable (octet dictionary). The new value of the channel</returns>
         public static async Task<string> SnmpGet_AsyncCallback(Channel ch, string pIp, CancellationToken ct)
         {
-            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Utilities.LISTEN_PORT);
+            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Util.LISTEN_PORT);
 
             IList<Variable> result = null;
             RequestState MyGetStateObject = new RequestState();
@@ -191,7 +193,7 @@ namespace snmpd
             IAsyncResult asyncGetResults;
 
             GetReqMessage = new GetRequestMessage(111, VersionCode.V1,
-                    new OctetString(Utilities.COMMUNITY), new List<Variable> { new Variable(ch.OID) });
+                    new OctetString(Util.COMMUNITY), new List<Variable> { new Variable(ch.OID) });
 
             MyGetStateObject.Get_Request_Message = GetReqMessage;
 
@@ -233,29 +235,6 @@ namespace snmpd
             return;
         }
 
-        public static string SnmpSet_AsyncCallback(Channel ch, string pIp)
-        {
-            List<Variable> lstVar = new List<Variable>();
-            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Utilities.LISTEN_PORT);
-            RequestState MySetStateObject = new RequestState();
-            SetRequestMessage SetReqMsg;
-            IAsyncResult asyncResponse;
-
-            int _NewChannelValue = ch.Value;
-            lstVar.Add(new Variable(ch.OID, new Integer32(_NewChannelValue)));
-
-            // build the SET message
-            SetReqMsg = new SetRequestMessage(211, VersionCode.V1, new OctetString("private"), lstVar);
-
-            MySetStateObject.Set_Request_Message = SetReqMsg;
-
-            // Start the SET Request - is already async 
-            asyncResponse = SetReqMsg.BeginGetResponse(Ep, new UserRegistry(),
-                Ep.GetSocket(), new AsyncCallback(SetResponse_Callback), MySetStateObject);
-
-            return asyncResponse.ToString();
-        }
-
         public static void SetResponse_Callback(IAsyncResult asynchronousResult)
         {
             RequestState setRequestState = (RequestState)asynchronousResult.AsyncState;
@@ -270,22 +249,22 @@ namespace snmpd
         }
 
         /// uses Linq and .Select - Returns an array of string  (channel values)
-        public static async Task<String[]> GetVals_Async(EthernetBoardPort _chLst, string pIp, CancellationToken ct)
+        public static async Task<string[]> GetVals_Async(EthernetBoardPort _chLst, string pIp, CancellationToken ct)
         {
             string[] chValues = null;
-            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            System.Text.StringBuilder sb = new StringBuilder();
 
             try
             {
                 // best for IO Ports??!?!?      
-                IEnumerable<Task<string>> _channels = _chLst.ChannelsList.Select(ch =>
+                IEnumerable<Task<string>> _channels = _chLst.DigitalChannels.Select(ch =>
                     TaskTools.RetryOnFault(() => SnmpGet_Async(ch.OID, pIp, ct), 3));
 
                 chValues = await Task.WhenAll(_channels);
             }
             catch (AggregateException ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions.Select(er => er.Message));
                     throw;
@@ -293,7 +272,7 @@ namespace snmpd
             }
             catch (Exception ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Message);
                     throw;
@@ -302,10 +281,50 @@ namespace snmpd
 
             return chValues;
         }
-    
- 
+
 
         // STATIC
+
+        public static async Task<string> SnmpGet_Specific(ObjectIdentifier pOid, string pIp)
+        {
+            IList<Variable> result = null;
+            string retVal;
+            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Util.LISTEN_PORT);
+
+            // This wrapper is super IMPORTANT recheck convention
+            try
+            {
+                await Task.Factory.StartNew(() =>
+                {
+                    result = Messenger.Get(VersionCode.V1,
+                        Ep, new OctetString(Util.COMMUNITY),
+                        new List<Variable> { new Variable(pOid) }, Util.SNMP_GET_TIMEOUT);
+                    Debug.Print("SnmpGet_Specific: " + pOid);
+                }).ConfigureAwait(false);
+            }
+            catch (AggregateException aex)
+            {
+                if (Util.IsRealError(aex))
+                {
+                    throw;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Util.IsRealError(ex))
+                {
+                    throw;
+                }
+            }
+
+            if (result != null && result.Count > 0)
+                retVal = result[0].Data.ToString();
+            else
+                retVal = string.Empty;
+
+            return retVal;
+        }
+
         public static async Task<string> SnmpGet_StaticAsync(ObjectIdentifier pOID, string ip, int pt, CancellationToken ct)
         {
             IList<Variable> result = null;
@@ -316,11 +335,11 @@ namespace snmpd
                 result = await Task.Run(() => Messenger.Get(VersionCode.V1, MyEp,
                         new OctetString("private"),
                         new List<Variable> { new Variable(pOID) },
-                        Utilities.SNMP_GET_TIMEOUT), ct).ConfigureAwait(false);
+                        Util.SNMP_GET_TIMEOUT), ct).ConfigureAwait(false);
             }
             catch (AggregateException ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions.Select(er => er.Message));
                     throw;
@@ -328,7 +347,7 @@ namespace snmpd
             }
             catch (Exception ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Message);
                     throw;
@@ -344,7 +363,7 @@ namespace snmpd
         public static async Task<IEnumerable<Channel>> GetChannels_Async(EthernetBoardPort pt)
         {
             IEnumerable<Channel> tsk = await Task.Factory.StartNew(() => 
-                pt.ChannelsList.Select(ch => ch));
+                pt.DigitalChannels.FindAll(ch => ch.Id > 0));
 
             return tsk;
         }
@@ -366,21 +385,22 @@ namespace snmpd
         #region SET METHODS
 
         // ************ SETS ****************************
-        public static async Task<string> SnmpSetAll_ParallelAsync(int pNewValue, string pIp, EthernetBoardPort ptList, CancellationToken ct)
+        public static async Task<string> SnmpSetAll_ParallelAsync(int pNewValue, string pIp, 
+                EthernetBoardPort ptList, CancellationToken ct)
         {
             System.Text.StringBuilder sb = new System.Text.StringBuilder();
-            List<Task<string>> taskList = new List<Task<string>>();
+            BlockingCollection<Task<string>> taskList = new BlockingCollection<Task<string>>();
 
             ct.ThrowIfCancellationRequested();
 
-            taskList.Add(await Task.Factory.StartNew(() => SnmpSet_Async(ptList.ChannelsList[0].OID, pNewValue, pIp, ct)));
-            taskList.Add(await Task.Factory.StartNew(() => SnmpSet_Async(ptList.ChannelsList[1].OID, pNewValue, pIp, ct)));
-            taskList.Add(await Task.Factory.StartNew(() => SnmpSet_Async(ptList.ChannelsList[2].OID, pNewValue, pIp, ct)));
-            taskList.Add(await Task.Factory.StartNew(() => SnmpSet_Async(ptList.ChannelsList[3].OID, pNewValue, pIp, ct)));
-            taskList.Add(await Task.Factory.StartNew(() => SnmpSet_Async(ptList.ChannelsList[4].OID, pNewValue, pIp, ct)));
-            taskList.Add(await Task.Factory.StartNew(() => SnmpSet_Async(ptList.ChannelsList[5].OID, pNewValue, pIp, ct)));
-            taskList.Add(await Task.Factory.StartNew(() => SnmpSet_Async(ptList.ChannelsList[6].OID, pNewValue, pIp, ct)));
-            taskList.Add(await Task.Factory.StartNew(() => SnmpSet_Async(ptList.ChannelsList[7].OID, pNewValue, pIp, ct)));
+            taskList.Add(Task.Run(() => SnmpSet_Async(ptList.DigitalChannels[0].OID, pNewValue, pIp, ct)));
+            taskList.Add(Task.Run(() => SnmpSet_Async(ptList.DigitalChannels[1].OID, pNewValue, pIp, ct)));
+            taskList.Add(Task.Run(() => SnmpSet_Async(ptList.DigitalChannels[2].OID, pNewValue, pIp, ct)));
+            taskList.Add(Task.Run(() => SnmpSet_Async(ptList.DigitalChannels[3].OID, pNewValue, pIp, ct)));
+            taskList.Add(Task.Run(() => SnmpSet_Async(ptList.DigitalChannels[4].OID, pNewValue, pIp, ct)));
+            taskList.Add(Task.Run(() => SnmpSet_Async(ptList.DigitalChannels[5].OID, pNewValue, pIp, ct)));
+            taskList.Add(Task.Run(() => SnmpSet_Async(ptList.DigitalChannels[6].OID, pNewValue, pIp, ct)));
+            taskList.Add(Task.Run(() => SnmpSet_Async(ptList.DigitalChannels[7].OID, pNewValue, pIp, ct)));
 
             ct.ThrowIfCancellationRequested();
 
@@ -412,41 +432,39 @@ namespace snmpd
             return sb.ToString();
         }
 
-        public static async Task<string> SnmpSetAll_Async(int pNewValue, CancellationToken ct)
+        public static async Task<string> SnmpSetAll_Async(EthernetBoard brd, int pNewValue, CancellationToken ct)
         {
-            int _port = 161;
-            string sIp = "192.168.1.40";
+            string sIp = brd.IP_Address;
             string res = null;
 
-            List<Task<Task<string>>> taskList = new List<Task<Task<string>>>();
+            BlockingCollection<Task<Task<string>>> taskList = new BlockingCollection<Task<Task<string>>>();
             StringBuilder sb = new StringBuilder();
-            EthernetBoard brd = new EthernetBoard(0, "192.168.1.40");
 
-            if (await Task.Run(() => brd.init("Board 0", _port, "private", 50, 100, true, true)))
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[0].DigitalChannels[0].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[0].DigitalChannels[1].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[0].DigitalChannels[2].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[0].DigitalChannels[3].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[0].DigitalChannels[4].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[0].DigitalChannels[5].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[0].DigitalChannels[6].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[0].DigitalChannels[7].OID, pNewValue, sIp, ct)));
+
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[1].DigitalChannels[0].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[1].DigitalChannels[1].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[1].DigitalChannels[2].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[1].DigitalChannels[3].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[1].DigitalChannels[4].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[1].DigitalChannels[5].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[1].DigitalChannels[6].OID, pNewValue, sIp, ct)));
+            taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPorts[1].DigitalChannels[7].OID, pNewValue, sIp, ct)));
+
+            if (brd.BoardID == 0 || brd.BoardID == 4)
             {
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[0].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[1].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[2].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[3].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[4].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[5].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[6].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[0].ChannelsList[7].OID, pNewValue, sIp, ct)));
-
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[0].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[1].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[2].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[3].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[4].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[5].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[6].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.DigitalPortsList[1].ChannelsList[7].OID, pNewValue, sIp, ct)));
-
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.AnalogPortsList[0].ChannelsList[0].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.AnalogPortsList[0].ChannelsList[1].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.AnalogPortsList[0].ChannelsList[2].OID, pNewValue, sIp, ct)));
-                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.AnalogPortsList[0].ChannelsList[3].OID, pNewValue, sIp, ct)));
-
+                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.AnalogPorts[0].DigitalChannels[0].OID, pNewValue, sIp, ct)));
+                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.AnalogPorts[0].DigitalChannels[1].OID, pNewValue, sIp, ct)));
+                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.AnalogPorts[0].DigitalChannels[2].OID, pNewValue, sIp, ct)));
+                taskList.Add(Task.Factory.StartNew(() => SnmpSet_Async(brd.AnalogPorts[0].DigitalChannels[3].OID, pNewValue, sIp, ct)));
+            }
                 Task tsk = Task.WhenAll(taskList.ToArray());
  
                 foreach (Task<Task<string>> ts in taskList)
@@ -464,11 +482,11 @@ namespace snmpd
                         sb.AppendLine("Task Id: " + ts.Id + " Task ??? - Result: " + res + " Status: " + ts.Status);
                     }
                 }
-            }
+
             return sb.ToString();
         }
 
-        public static async Task<string> SnmpSet_StaticAsync(ObjectIdentifier pOid, string sIPAddress, int pPortNo, int pNewChannelValue, CancellationToken ct)
+    public static async Task<string> SnmpSet_StaticAsync(ObjectIdentifier pOid, string sIPAddress, int pPortNo, int pNewChannelValue, CancellationToken ct)
         {
             IList<Variable> result = null;
             List<Variable> lstVar = new List<Variable>();
@@ -480,7 +498,7 @@ namespace snmpd
             try
             {
                 result = await Task.Run(() => Messenger.Set(VersionCode.V1, MyEp,
-                        new OctetString("private"), lstVar, Utilities.SNMP_SET_TIMEOUT), ct).ConfigureAwait(false);
+                        new OctetString("private"), lstVar, Util.SNMP_SET_TIMEOUT), ct).ConfigureAwait(false);
 
                 if (result != null && result.Count > 0)
                 {
@@ -493,7 +511,7 @@ namespace snmpd
             }
             catch (AggregateException ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions.Select(er => er.Message));
                     throw;
@@ -501,7 +519,7 @@ namespace snmpd
             }
             catch (Exception ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Message);
                     throw;
@@ -530,7 +548,7 @@ namespace snmpd
             lstVar.Add(new Variable(_Oid, new Integer32(_iChannelValue)));
             string retVal = null;
             string _sOid = _Oid.ToString();
-            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Utilities.LISTEN_PORT);
+            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Util.LISTEN_PORT);
 
             ct.ThrowIfCancellationRequested();
 
@@ -539,13 +557,13 @@ namespace snmpd
                 Task.Factory.StartNew(() =>
                 {
                     result = Messenger.Set(VersionCode.V1, Ep,
-                            new OctetString(Utilities.COMMUNITY), lstVar, Utilities.SNMP_SET_TIMEOUT);
+                            new OctetString(Util.COMMUNITY), lstVar, Util.SNMP_SET_TIMEOUT);
                 },
                 ct, TaskCreationOptions.DenyChildAttach, TaskScheduler.Current).ConfigureAwait(false);
             }
             catch (AggregateException ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions.Select(er => er.Message));
                     throw;
@@ -553,7 +571,7 @@ namespace snmpd
             }
             catch (Exception ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Message);
                     throw;
@@ -572,7 +590,7 @@ namespace snmpd
             IList<Variable> result = null;
             List<Variable> lstVar = new List<Variable>();
             int ON = 1;
-            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Utilities.LISTEN_PORT);
+            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Util.LISTEN_PORT);
 
             ct.ThrowIfCancellationRequested();
 
@@ -614,13 +632,13 @@ namespace snmpd
 
             {
                 result = await Task.Run(() => Messenger.Set(VersionCode.V1, Ep,
-                    new OctetString(Utilities.COMMUNITY), lstVar, Utilities.SNMP_SET_TIMEOUT));
+                    new OctetString(Util.COMMUNITY), lstVar, Util.SNMP_SET_TIMEOUT));
 
                 Debug.Print("SETALL: Result Id: " + result.Select(v => v.Id) + " Data: " + result.Select(v => v.Id));
             }
             catch (AggregateException ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions.Select(er => er.Message));
                     throw;
@@ -628,7 +646,7 @@ namespace snmpd
             }
             catch (Exception ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Message);
                     throw;
@@ -642,43 +660,13 @@ namespace snmpd
             return result;
         }
 
-        public static string SnmpSet(ObjectIdentifier pOid, int pNewVale, string pIp)
-        {
-            IList<Variable> result = null;
-            string retVal = null;
-            List<Variable> lstVar = new List<Variable>();
-            lstVar.Add(new Variable(pOid, new Integer32(pNewVale)));
-            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Utilities.LISTEN_PORT);
-
-            try
-            {
-                result = Messenger.Set(VersionCode.V1, Ep,
-                    new OctetString(Utilities.COMMUNITY), lstVar, Utilities.SNMP_SET_TIMEOUT);
-            }
-            catch (Exception ex)
-            {
-                if (Utilities.IsRealError(ex))
-                {
-                    Debug.Print("Unhandled Error: " + ex.Message);
-                    throw;
-                }
-            }
-
-            if (result != null && result.Count > 0)
-                retVal = result[0].Data.ToString();
-            else
-                retVal = string.Empty;
-
-            return retVal;
-        }
-
         /// <summary>Updates the EthernetBoard.Port.Channel value of a device.</summary>
         /// <returns>(List) of type Variable (octet dictionary) </returns>
         public static async Task<string> SnmpSet_Async(ObjectIdentifier pOid, int pNewChannelValue, string pIp, CancellationToken ct)
         {
             // use TPL 
             string retVal = null;
-            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Utilities.LISTEN_PORT);
+            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Util.LISTEN_PORT);
             IList<Variable> result = null;
             List<Variable> lstVar = new List<Variable>();
             lstVar.Add(new Variable(pOid, new Integer32(pNewChannelValue)));
@@ -693,13 +681,13 @@ namespace snmpd
                     result = null;
 
                     result = Messenger.Set(VersionCode.V1, Ep,
-                        new OctetString(Utilities.COMMUNITY), lstVar, Utilities.SNMP_SET_TIMEOUT);
+                        new OctetString(Util.COMMUNITY), lstVar, Util.SNMP_SET_TIMEOUT);
 
                 }).ConfigureAwait(false);
             }
             catch (AggregateException ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions.Select(er => er.Message));
                     throw;
@@ -707,7 +695,7 @@ namespace snmpd
             }
             catch (Exception ex)
             {
-                if (Utilities.IsRealError(ex))
+                if (Util.IsRealError(ex))
                 {
                     Debug.Print("Unhandled Error: " + ex.Message);
                     throw;

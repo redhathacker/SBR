@@ -9,7 +9,6 @@ using System.Timers;
 using System.Threading;
 using System.Threading.Tasks;
 using Lextm.SharpSnmpLib;
-
 using Lextm.SharpSnmpLib.Messaging;
 using System.Runtime.InteropServices;
 
@@ -21,976 +20,742 @@ using System.Runtime.InteropServices;
 // Async Await Queue manager class>?
 // use ConfigureAwait(false) for fire anf forget methods
 // dispossing objects with  using
-// Make delegates use object sender and Args e
-// 
+
 namespace snmpd
 {
-     // sealed - cannot be inherited. offers a little optimization
 
-     public sealed class EthernetBoard : IDisposable
-     {
-          #region VariableAndDelegateDeclarations
+    /// <summary>
+    /// A class that represents a Denkovi Relay Board
+    /// </summary>
+    public sealed class EthernetBoard : IDisposable
+    {
+        #region VariableAndDelegateDeclarations
 
-          // Declare delegate for access to error handling functions outside of the class
-          public delegate void ErrorHandlerDelegate(object sender, ErrorEventArgs e);
-          // Declare an error event for the client to subscribe to
-          public event ErrorHandlerDelegate onError;
+        /// <summary>
+        /// Delegate for access to error handling functions outside of the class
+        /// </summary>
+        public delegate void ErrorHandlerDelegate(object sender, ErrorEventArgs e);
 
-          public delegate void AsyncErrorHandlerDelegate(object sender, AsyncErrorEventArgs e);
-          public event AsyncErrorHandlerDelegate onAsyncError;
+        /// <summary>
+        /// error event for the client to subscribe to
+        /// </summary>
+        public event ErrorHandlerDelegate onError;
 
-          public delegate void LoggingRaisedHandlerDelegate(string message, string color);
-          public event LoggingRaisedHandlerDelegate onLoggingRaised;
+        public delegate void InitializeHandlerDelegate(object sender, BoardInitEventArgs e);
+        public event InitializeHandlerDelegate onInit;
 
-          public delegate void DigitalInputHandlerDelegate(int boardID, int _ioPort, Channel channel);
-          public event DigitalInputHandlerDelegate onDigitalInput;
+        public delegate void AsyncErrorHandlerDelegate(object sender, AsyncErrorEventArgs e);
+        public event AsyncErrorHandlerDelegate onAsyncError;
 
-          public delegate void AnalogInputHandlerDelegate(int boardID, int _ioPort, Channel channel);
-          public event AnalogInputHandlerDelegate onAnalogInput;
+        public delegate void LoggingRaisedHandlerDelegate(string message, string color);
+        public event LoggingRaisedHandlerDelegate onLoggingRaised;
 
-          public delegate void InitializeHandlerDelegate(int boardID, IList<EthernetBoardPort> ioPorts, IList<EthernetBoardPort> adcPorts);
-          public event InitializeHandlerDelegate onInit;
+        public delegate void DigitalInputHandlerDelegate(object sender, DigitalInputEventArgs e);
+        public event DigitalInputHandlerDelegate onDigitalInput;
 
-          // public properties
-          public string BoardName { get; private set; }
-          public int BoardID { get; private set; }
-          public int IoPort { get; private set; }
-          public string IP_Address { get; private set; }
+        public delegate void AnalogInputHandlerDelegate(object sender, AnalogInputEventArgs e);
+        public event AnalogInputHandlerDelegate onAnalogInput;
 
-          private IPEndPoint EndPoint = null;
-          private IPAddress IP = null;
 
-          public List<EthernetBoardPort> DigitalPortsList { get; private set; }
-          public List<EthernetBoardPort> AnalogPortsList { get; private set; }
 
-          // Analog timer values
-          private int AnalogInputRefreshInMs = 100;
-          // Digital Timer values
-          private int DigitalInputRefreshInMs = 30;
+        // public properties
+        public string BoardName { get; private set; }
+        public int BoardID { get; private set; }
+        public int TcpPort { get; private set; }
+        public string IP_Address { get; private set; }
+        public bool IsActive { get; private set; }
+        public bool AnalogListening { get; private set; }
+        public bool Cancel
+        {
+            get { return CancelTokenSource.IsCancellationRequested; }
+            set { if (value == true) CancelTokenSource.Cancel(); }
+        }
 
-          private System.Timers.Timer DigitalTimer = null;
-          private System.Timers.Timer AnalogTimer = null;
+        private IPEndPoint EndPoint = null;
+        private IPAddress IP = null;
 
-          private Task task_DigitalTimer = null;
-          private Task task_AnalogTimer = null;
+        public List<EthernetBoardPort> DigitalPorts { get; private set; }
+        public List<EthernetBoardPort> AnalogPorts { get; private set; }
 
-          public CancellationTokenSource CancelTokenSource = null;
-          public CancellationToken GlobalCancelToken;
+        private CancellationTokenSource CancelTokenSource = null;
+        private CancellationToken GlobalCancelToken;
 
-          private IntPtr nativeResource = Marshal.AllocHGlobal(100);
-          private readonly object EthernetBoardLock = new object();
+        private IntPtr nativeResource = Marshal.AllocHGlobal(100);
 
-          private readonly object LockHelper = new object();
+        #endregion
 
-          Stopwatch sw = new Stopwatch();
-          Stopwatch sw2 = new Stopwatch();
-          Stopwatch sw3 = new Stopwatch();
-          Stopwatch sw4 = new Stopwatch();
-          Stopwatch sw5 = new Stopwatch();
-          Stopwatch sw6 = new Stopwatch();
-          Stopwatch sw7 = new Stopwatch();
+        #region InitializationMethods
 
-          int? dTaskID, aTaskId;
-          #endregion
+        //public EthernetBoard()
+        //{
 
-          #region InitializationMethods
+        //}
 
-          //public EthernetBoard()
-          //{
+        /// <summary>
+        /// Creates a new instance of the EthernetBoard class
+        /// </summary>
+        public EthernetBoard(int _boardId, string _IpAddress)
+        {
+            // store the current channel values for comparison when checking for new data
+            StringBuilder sb = new StringBuilder();
+            EthernetBoardPort tempPort = null;
+            int thisID = 0;
 
-          //}
+            BoardID = _boardId;
+            IP_Address = _IpAddress;
 
-          /// <summary>
-          /// Creates a new instance of the EthernetBoard class
-          /// </summary>
-          public EthernetBoard(int _boardId, string _IpAddress)
-          {
-               // store the current channel values for comparison when checking for new data
-               StringBuilder sb = new StringBuilder();
-               EthernetBoardPort tempPort = null;
+            string sOid = null;
+            string sNm = null;
 
-               BoardID = _boardId;
-               IP_Address = _IpAddress;
+            DigitalPorts = new List<EthernetBoardPort>();
 
-               string sOid = null;
-               string sNm = null;
+            // These loops assign the channels names, numbers, and other values to
+            // the List of Channel objects in the EthernetBoardPort objects
+            tempPort = new EthernetBoardPort(EthernetBoardPortNo.DIGITAL_PORT_1,
+                false, PortMode.INPUT, _IpAddress, _boardId);
 
-               DigitalPortsList = new List<EthernetBoardPort>();
-               AnalogPortsList = new List<EthernetBoardPort>();
+            for (int index = 0; index < Util.DIG_CHAN_PER_PORT; index++)
+            {
+                thisID = index + 1;
+                sb.Clear();
+                sOid = sb.Append(".1.3.6.1.4.1.19865.1.2.1.").Append(thisID).Append(".0").ToString();
+                sNm = "Digital Port # 2 Channel # " + thisID;
 
-               // These loops assign the channels names, numbers, and other values to
-               // the List of Channel objects in the EthernetBoardPort object
-               // lock it while reading so no other thread messes with the counter variables
-               tempPort = new EthernetBoardPort(EthernetBoardPortNo.DIGITAL_PORT_1, false, PortMode.INPUT, _IpAddress, _boardId); // Port#, not analog, port mode
+                tempPort.DigitalChannels.Add(new Channel(thisID, new ObjectIdentifier(sOid), sNm, ChannelState.OFF));
+            }
 
-               for (int ChannelCount1 = 0 + Utilities.DIG_CHAN_START_NO; ChannelCount1 < Utilities.DIG_CHAN_PER_PORT + Utilities.DIG_CHAN_START_NO; ChannelCount1++)
-               {
+            DigitalPorts.Add(tempPort);
+
+            tempPort = new EthernetBoardPort(EthernetBoardPortNo.DIGITAL_PORT_2,
+                false, PortMode.INPUT, _IpAddress, _boardId);
+
+            for (int index2 = 0; index2 < Util.DIG_CHAN_PER_PORT; index2++)
+            {
+                thisID = index2 + 1;
+                sb.Clear();
+                sOid = sb.Append(".1.3.6.1.4.1.19865.1.2.2.").Append(thisID).Append(".0").ToString();
+                sNm = "Digital Port # 2 Channel # " + thisID;
+
+                tempPort.DigitalChannels.Add(new Channel
+                    (thisID, new ObjectIdentifier(sOid), sNm, ChannelState.OFF));
+            }
+
+            DigitalPorts.Add(tempPort);
+
+            if (BoardID == 0 || BoardID == 4)
+            {
+                AnalogPorts = new List<EthernetBoardPort>();
+                tempPort = new EthernetBoardPort(EthernetBoardPortNo.ADC_PORT_1,
+                    true, PortMode.INPUT, _IpAddress, _boardId);
+
+                // 1 analog port with 4 channels
+                for (int index3 = 0; index3 < Util.ANLG_CHAN_PER_PORT; index3++)
+                {
+                    thisID = index3 + 1;
                     sb.Clear();
-                    sOid = sb.Append(".1.3.6.1.4.1.19865.1.2.1.").Append(ChannelCount1).Append(".0").ToString();
-                    sNm = "Digital Port # 0 Channel # " + ChannelCount1;
-
-                    tempPort.ChannelsList.Add(new Channel(ChannelCount1, new ObjectIdentifier(sOid), sNm, 0));
-               }
-
-               DigitalPortsList.Add(tempPort);
-
-               tempPort = new EthernetBoardPort(EthernetBoardPortNo.DIGITAL_PORT_2, false, PortMode.INPUT, _IpAddress, _boardId); // Port#, not analog, port mode
-
-               for (int ChannelCount2 = 0 + Utilities.DIG_CHAN_START_NO; ChannelCount2 < Utilities.DIG_CHAN_PER_PORT + Utilities.DIG_CHAN_START_NO; ChannelCount2++)
-               {
-                    sb.Clear();
-                    sOid = sb.Append(".1.3.6.1.4.1.19865.1.2.2.").Append(ChannelCount2).Append(".0").ToString();
-                    sNm = "Digital Port # 1 Channel # " + ChannelCount2;
-
-                    tempPort.ChannelsList.Add(new Channel(ChannelCount2, new ObjectIdentifier(sOid), sNm, 0));
-               }
-
-               DigitalPortsList.Add(tempPort);
-
-               if (BoardID == 0 || BoardID == 4)
-               {
-                    tempPort = new EthernetBoardPort(0, true, PortMode.INPUT, _IpAddress, _boardId); // Port#, is analog, port mode
-
-                    // 1 analog port with 4 channels
-                    for (int ChannelCount3 = 0 + Utilities.ANLG_CHAN_START_NO; ChannelCount3 < Utilities.ANLG_CHAN_PER_PORT + Utilities.ANLG_CHAN_START_NO; ChannelCount3++)
-                    {
-                         sb.Clear();
-                         sOid = sb.Append(".1.3.6.1.4.1.19865.1.2.3.").Append(ChannelCount3).Append(".0").ToString();
-                         sNm = "Analog Port # 1 Channel #" + ChannelCount3;
-
-                         tempPort.ChannelsList.Add(new Channel(ChannelCount3, new ObjectIdentifier(sOid), sNm, 0));
-                    }
-
-                    AnalogPortsList.Add(tempPort);
-               }
-          }
-
-          public async Task<bool> init(string sBoardName, int iPort, string sCommunity, int iDigitalInputRefreshInMs,
-              int iAnalogInputRefreshInMs, bool bAutoRefreshDigitalInput, bool bAutoRefreshAnalogInput)
-          {
-               bool success = false;
-
-               CancelTokenSource = new CancellationTokenSource();
-               GlobalCancelToken = CancelTokenSource.Token;
-
-               IoPort = iPort;
-               BoardName = sBoardName;
-
-               IP = IPAddress.Parse(IP_Address);
-               EndPoint = new IPEndPoint(IP, IoPort);
-
-               DigitalInputRefreshInMs = iDigitalInputRefreshInMs;
-               AnalogInputRefreshInMs = iAnalogInputRefreshInMs;
-
-               await Task.Run(() => GetInitialValues_Async(GlobalCancelToken)).ConfigureAwait(false);
-
-               success = true;
-
-               if (onInit != null)
-                    onInit(BoardID, DigitalPortsList, AnalogPortsList);
-
-               //if (onLoggingRaised != null)
-               //    onLoggingRaised("Initialized GPIO Ethernet Board with ID : " + _BoardID.ToString()
-               //        + " and Name : " + _BoardName + " completed successfully", "#0000FF");
-
-               return success;
-          }
-
-
-          public bool GetInitialValues_Async(CancellationToken ct)
-          {
-               // Task<string> result = null;
-               string result = null;
-               int newVal;
-               bool success = false;
-
-               ct.ThrowIfCancellationRequested();
-
-               Parallel.ForEach(DigitalPortsList[0].ChannelsList, async ch =>
-               {
-                    result = null;
-                    try
-                    {
-                         // result = await Task.Run(() => SnmpGet_Async(channel));
-                         result = await TaskTools.RetryOnFault(() => SnmpTools.SnmpGet_Async(ch.OID, IP_Address, ct), 3);
-
-                         if (result != null && int.TryParse(result, out newVal))
-                              ch.State = (newVal == 0 ? ChannelState.OFF : ChannelState.ON);
-
-                         success = true;
-                         Debug.Print("GetInitialValues_Async IO1 ID: " + ch.Id + " Value: " + result);
-                    }
-                    catch (AggregateException ex)
-                    {
-                         if (Utilities.IsRealError(ex))
-                         {
-                              if (onAsyncError != null)
-                                   onAsyncError(this, new AsyncErrorEventArgs(ex));
-                              else
-                                   Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions.Select(er => er.Message));
-                         }
-                    }
-                    catch (Exception ex)
-                    {
-                         if (Utilities.IsRealError(ex))
-                         {
-                              if (onError != null)
-                                   onError(this, new ErrorEventArgs(ex));
-                              else
-                                   Debug.Print("Unhandled Error: " + ex.Message);
-                         }
-                    }
-               });
-
-               ct.ThrowIfCancellationRequested();
-
-               Parallel.ForEach(DigitalPortsList[1].ChannelsList, async ch =>
-               {
-                    result = null;
-
-                    try
-                    {
-                         //result = await Task.Run(() => Board0.SnmpGet_Async(ch));
-                         result = await TaskTools.RetryOnFault(() => SnmpTools.SnmpGet_Async(ch.OID, IP_Address, ct), 3);
-
-                         if (result != null && int.TryParse(result, out newVal))
-                              ch.State = (newVal == 0 ? ChannelState.OFF : ChannelState.ON);
-
-                         success = true;
-                    }
-                    catch (AggregateException ex)
-                    {
-                         if (Utilities.IsRealError(ex))
-                         {
-                              if (onAsyncError != null)
-                                   onAsyncError(this, new AsyncErrorEventArgs(ex));
-                              else
-                                   Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions.Select(er => er.Message));
-                         }
-                    }
-                    catch (Exception ex)
-                    {
-                         if (Utilities.IsRealError(ex))
-                         {
-                              if (onError != null)
-                                   onError(this, new ErrorEventArgs(ex));
-                              else
-                                   Debug.Print("Unhandled Error: " + ex.Message);
-                         }
-                    }
-               });
-
-               ct.ThrowIfCancellationRequested();
-
-               if (BoardID == 0 || BoardID == 4)
-               {
-                    Parallel.ForEach(AnalogPortsList[0].ChannelsList, async ch =>
-                    {
-                         result = null;
-
-                         try
-                         {
-                              //result = await Task.Run(() => SnmpGet_Async(channel, 100));
-                              result = await TaskTools.RetryOnFault(() => SnmpTools.SnmpGet_Async(ch.OID, IP_Address, ct), 3);
-
-                              if (result != null && int.TryParse(result, out newVal))
-                                   ch.State = (newVal == 0 ? ChannelState.OFF : ChannelState.ON);
-
-                              success = true;
-                         }
-                         catch (AggregateException ex)
-                         {
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onAsyncError != null)
-                                        onAsyncError(this, new AsyncErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions.Select(er => er.Message));
-                              }
-                         }
-                         catch (Exception ex)
-                         {
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onError != null)
-                                        onError(this, new ErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " + ex.Message);
-                              }
-                         }
-                    });
-               }
-
-               if (onInit != null)
-                    onInit(BoardID, DigitalPortsList, AnalogPortsList);
-
-               return success;
-          }
-
-          public async Task InitGetValues_AsyncRetry(CancellationToken ct)
-          {
-               string getResult = null;
-               //Task<string> setResult = null;
-
-               foreach (EthernetBoardPort pt in DigitalPortsList)
-                    foreach (Channel ch in pt.ChannelsList)
-                    {
-                         getResult = null;
-
-                         try
-                         {
-                              ct.ThrowIfCancellationRequested();
-
-                              // Works
-                              getResult = await Task.Run(() => TaskTools.RetryOnFault(() => SnmpTools.SnmpGet_Async(ch.OID, IP_Address, ct), 3));
-                              //setResult = await getResult.ContinueWith(tc => TaskTools.RetryOnFault(() =>
-                              //    SnmpSet_Async(ch, Convert.ToInt32(tc.Result)), 3), TaskContinuationOptions.OnlyOnRanToCompletion);
-
-                              // works
-                              //getResult = await Task.Factory.StartNew(() => SnmpGet_Async(ch));
-                              //setResult = await getResult.ContinueWith(t1 => SnmpSet_Async(ch, Convert.ToInt32(getResult.Result)),
-                              //    TaskContinuationOptions.OnlyOnRanToCompletion);
-                              if (getResult != null && getResult.Length > 0)
-                              {
-                                   Debug.Print("Port: " + pt.IoPortNo + " Channel ID: " + ch.Id + " Value: " + getResult); // + " Set Value: " + setResult.Result);
-                              }
-
-                         }
-                         catch (AggregateException ex)
-                         {
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onAsyncError != null)
-                                        onAsyncError(this, new AsyncErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " +
-                                            ex.Flatten().InnerExceptions.Select(er => er.Message));
-                              }
-                         }
-                         catch (Exception ex)
-                         {
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onError != null)
-                                        onError(this, new ErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " + ex.Message);
-                              }
-                         }
-                    }
-
-               foreach (EthernetBoardPort pt in AnalogPortsList)
-                    foreach (Channel ch in pt.ChannelsList)
-                    {
-                         getResult = null;
-
-                         try
-                         {
-
-                              ct.ThrowIfCancellationRequested();
-
-                              // works
-                              getResult = await Task.Run(() => TaskTools.RetryOnFault(() =>
-                                  SnmpTools.SnmpGet_Async(ch.OID, IP_Address, ct), 3));
-                              //setResult = await getResult.ContinueWith(tc => TaskTools.RetryOnFault(() =>
-                              //    SnmpSet_Async(ch, Convert.ToInt32(getResult.Result)), 3), TaskContinuationOptions.OnlyOnRanToCompletion);
-
-                              // works
-                              //getResult = await Task.Factory.StartNew(() => SnmpGet_Async(ch));
-                              //setResult = await getResult.ContinueWith(t1 => SnmpSet_Async(ch, Convert.ToInt32(getResult.Result)),
-                              //   TaskContinuationOptions.OnlyOnRanToCompletion);
-                              if (getResult != null && getResult.Length > 0)
-                              {
-                                   Debug.Print("Analog Success! Channel ID: " + ch.Id + " Get Value: " + getResult); // + " Set Value: " + setResult.Result);
-                              }
-                         }
-                         catch (AggregateException ex)
-                         {
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onAsyncError != null)
-                                        onAsyncError(this, new AsyncErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " +
-                                            ex.Flatten().InnerExceptions.Select(er => er.Message));
-                              }
-                         }
-                         catch (Exception ex)
-                         {
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onError != null)
-                                        onError(this, new ErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " + ex.Message);
-                              }
-                         }
-                    }
-          }
-
-          #endregion
-
-          #region ChannelMethods
-
-          public void ToggleRelay(ObjectIdentifier pOid, ChannelState pState)
-          {
-               int newValue = (pState == ChannelState.ON ? 0 : 1); // Set it to the opposite
-               setIOPortChannel(pOid, newValue).ConfigureAwait(false);
-          }
-
-          public async Task setIOPortChannel(ObjectIdentifier pOid, int pNewChannelValue)
-          {
-               try
-               {
-                    await Task.Run(() => SnmpTools.SnmpSet_Async(pOid, pNewChannelValue, IP_Address, GlobalCancelToken)).ConfigureAwait(false);
-               }
-               catch (AggregateException ex)
-               {
-                    if (Utilities.IsRealError(ex))
-                    {
-                         if (onAsyncError != null)
-                              onAsyncError(this, new AsyncErrorEventArgs(ex));
-                         else
-                              Debug.Print("Unhandled Error: " +
-                                  ex.Flatten().InnerExceptions.Select(er => er.Message));
-                    }
-               }
-               catch (Exception ex)
-               {
-                    if (Utilities.IsRealError(ex))
-                    {
-                         if (onError != null)
-                              onError(this, new ErrorEventArgs(ex));
-                         else
-                              Debug.Print("Unhandled Error: " + ex.Message);
-                    }
-               }
-          }
-
-          #endregion
-
-          #region CleanUpMethods
-
-          ~EthernetBoard()
-          {
-               // free native resources if there are any.
-               if (nativeResource != IntPtr.Zero)
-               {
-                    Marshal.FreeHGlobal(nativeResource);
-                    nativeResource = IntPtr.Zero;
-               }
-          }
-
-          public void Dispose()
-          {
-               DigitalTimer.Dispose();
-               AnalogTimer.Dispose();
-
-               task_AnalogTimer.Dispose();
-               task_DigitalTimer.Dispose();
-
-               GC.ReRegisterForFinalize(this);
-          }
-
-          #endregion
-
-          #region TimerMethods
-
-          /*********************************************************************************/
-          /*************************** EVENT HANDLERS **************************************/
-          public bool StartTimers()
-          {
-               bool success = false;
-
-               try
-               {
-                    DigitalTimer = new System.Timers.Timer(DigitalInputRefreshInMs);
-                    DigitalTimer.AutoReset = false; // To keep threads from piling up, manually control the timer
-                    DigitalTimer.Elapsed += new ElapsedEventHandler(DigitalTimer_OnTick);
-                    DigitalTimer.Enabled = true;
-
-                    if (BoardID == 0 || BoardID == 4)
-                    {
-                         AnalogTimer = new System.Timers.Timer(AnalogInputRefreshInMs);
-                         AnalogTimer.AutoReset = false; // To keep threads from piling up, manually control the timer
-                         AnalogTimer.Elapsed += new ElapsedEventHandler(AnalogTimer_OnTick);
-                         AnalogTimer.Enabled = true;
-                    }
-
-                    success = true;
-               }
-               catch (Exception ex)
-               {
-                    if (Utilities.IsRealError(ex))
-                    {
-                         if (onError != null)
-                              onError(this, new ErrorEventArgs(ex));
-                         else
-                              Debug.Print("Unhandled Error: " + ex.Message);
-                    }
-               }
-
-               return success;
-          }
-
-          public bool ToggleDigitalInputTimer()
-          {
-               if (DigitalTimer.Enabled)
-               {
-                    DigitalTimer.Enabled = false;
-               }
-               else
-               {
-                    DigitalTimer.AutoReset = false;
-                    DigitalTimer.Interval = DigitalInputRefreshInMs;
-                    DigitalTimer.Enabled = true;
-               }
-
-               return DigitalTimer.Enabled;
-          }
-
-          public bool ToggleAnalogInputTimer()
-          {
-               if (BoardID == 0 || BoardID == 4)
-               {
-                    if (AnalogTimer.Enabled)
-                    {
-                         AnalogTimer.Enabled = false;
-                    }
+                    sOid = sb.Append(".1.3.6.1.4.1.19865.1.2.3.").Append(thisID).Append(".0").ToString();
+                    sNm = "Analog Port # 1 Channel #" + thisID;
+
+                    tempPort.AnalogChannels.Add(new AnalogChannel
+                        (thisID, new ObjectIdentifier(sOid), sNm, 0));
+                }
+
+                AnalogPorts.Add(tempPort);
+            }        
+        }
+
+        /// <summary>
+        /// This method sets up global EthernetBoard values, retrieves and assigns all 
+        /// EthernetBoardPorts and Channel values.
+        /// </summary>
+        /// <param name="pBoardName">The name of the Board.</param>
+        /// <returns>Boolean success</returns>
+        public async Task<bool> Init(string pBoardName)
+        {
+            bool success = false;
+            IsActive = false;
+            AnalogListening = false;
+
+            CancelTokenSource = new CancellationTokenSource();
+            GlobalCancelToken = CancelTokenSource.Token;
+
+            TcpPort = Util.LISTEN_PORT;
+            BoardName = pBoardName;
+            IP = IPAddress.Parse(IP_Address);
+            EndPoint = new IPEndPoint(IP, TcpPort);
+
+            await Task.Run(() => GetInitialValues());
+
+            success = true;
+
+            onInit?.Invoke(this, new BoardInitEventArgs(BoardID, DigitalPorts, AnalogPorts));
+
+            //if (onLoggingRaised != null)
+            //    onLoggingRaised("Initialized GPIO Ethernet Board with ID : " + _BoardID.ToString()
+            //        + " and Name : " + _BoardName + " completed successfully", "#0000FF");
+
+            return success;
+        }
+
+        #endregion
+
+        #region ChannelMethods
+
+        public async Task AllOn()
+        {
+            foreach (Channel ch in DigitalPorts[1].DigitalChannels)
+            {
+                ch.SetState(ChannelState.ON);
+
+                onDigitalInput?.Invoke(this, new DigitalInputEventArgs(this.BoardID, DigitalPorts[1].IoPortNo, ch));
+            }
+        }
+
+        public async Task AllOff()
+        {
+            foreach (Channel ch in DigitalPorts[1].DigitalChannels)
+            {
+                ch.SetState(ChannelState.OFF);
+
+                onDigitalInput?.Invoke(this, new DigitalInputEventArgs(this.BoardID, DigitalPorts[1].IoPortNo, ch));
+            }
+        }
+
+        /// <summary>
+        /// For debugging purposes. Shows the value of every channel.
+        /// </summary>
+        /// <returns></returns>
+        public string PrintAllChannels()
+        {
+            StringBuilder sb = new StringBuilder();
+            string sChVal;
+
+            sb.Clear();
+            sb.Append("All Channel Values - Board: ").AppendLine(IP_Address);
+            sb.AppendLine("DIGITAL PORT 1 ");
+
+            foreach (Channel ch in DigitalPorts[0].DigitalChannels)
+            {
+                sChVal = (ch.State == ChannelState.ON ? "ON" : "OFF");
+
+                sb.Append("Channel #").Append(ch.Id).Append(" - Value: ").Append(sChVal).AppendLine(".");
+            }
+
+            sb.AppendLine("DIGITAL PORT 2 ");
+
+            foreach (Channel ch in DigitalPorts[1].DigitalChannels)
+            {
+                sChVal = (ch.State == ChannelState.ON ? "ON" : "OFF");
+
+                sb.Append("Channel #").Append(ch.Id).Append(" - Value: ").Append(sChVal).AppendLine(".");
+            }
+
+            if (AnalogPorts.Count > 0)
+            {
+                sb.AppendLine("ANALOG PORT 1 ");
+                foreach (AnalogChannel ch in AnalogPorts[0].AnalogChannels)
+                {
+                    sb.Append("Channel #").Append(ch.Id).Append(" - Value: ").Append(ch.Value).AppendLine(".");
+                }
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Set a trap to be informed when a channel value has changed
+        /// </summary>
+        /// <param name="pIP">The IP of the device to monitor</param>
+        /// <param name="pEOid">The Enterprise OID</param>
+        /// <returns></returns>
+        public async Task CreateTrap(IProgress<string> pProgress, CancellationToken CanTok)
+        {
+            List<Variable> lstVars = new List<Variable>();
+
+            foreach (Channel ch in ChannelHelper.AllDigitalBoard1Channels)
+            {
+                lstVars.Add(new Variable(ch.OID, new Integer32(1)));
+            }
+
+            foreach (Channel ch in ChannelHelper.AllDigitalBoard2Channels)
+            {
+                lstVars.Add(new Variable(ch.OID, new Integer32(1)));
+            }
+
+            // ???? encode the communitystring. Once I set the communitystring to base64 for the discovered SNMP class objec????
+            try
+            {
+                CanTok.ThrowIfCancellationRequested();
+                ObjectIdentifier oid = new ObjectIdentifier(Util.ENTERPRISE_OID);
+
+                // sendtrapv1(Where its going, Who its from, community string, Enterprise OID, TrapType, 
+                // some code, timestamp, List Trap values)
+                await Task.Factory.StartNew(() => Messenger.SendTrapV1(new IPEndPoint(this.IP, Util.RECEIVE_PORT),
+                    this.IP, new OctetString("private"), oid, GenericCode.ColdStart, 0, 0, lstVars)).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                if (!(ex is Lextm.SharpSnmpLib.Messaging.TimeoutException)
+                    && !(ex is System.Net.Sockets.SocketException))
+                {
+                    throw;
+                }
+            }
+
+
+            // -----------------------------------------------------------------------
+            //using SnmpSharpNet() { 
+            //    SnmpSharpNet.TrapAgent agent = new SnmpSharpNet.TrapAgent();
+
+            //    // Variable Binding collection to send with the trap
+            //    SnmpSharpNet.VbCollection col = new SnmpSharpNet.VbCollection();
+
+            //    col.Add(new Oid("1.3.6.1.2.1.1.1.0"), new OctetString("Test string"));
+            //    col.Add(new Oid("1.3.6.1.2.1.1.2.0"), new Oid("1.3.6.1.9.1.1.0"));
+            //    col.Add(new Oid("1.3.6.1.2.1.1.3.0"), new TimeTicks(2324));
+            //    col.Add(new Oid("1.3.6.1.2.1.1.4.0"), new OctetString("Milan"));
+
+            //    // Send the trap to the localhost port 162
+            //    agent.SendV1Trap(new IpAddress("localhost"), 162, "public",
+            //                     new Oid("1.3.6.1.2.1.1.1.0"), new IpAddress("127.0.0.1"),
+            //                     SnmpConstants.LinkUp, 0, 13432, col);
+            //}
+            // ------------------------------------------------------------------------
+
+        }
+
+
+        /// <summary>
+        /// Toggle the State of a channel (On/Off).
+        /// </summary>
+        /// <param name="ch">The Channel to toggle.</param>
+        public void ToggleRelay(Channel ch)
+        {
+            int newValue = (ch.State == ChannelState.ON ? 0 : 1); // Set it to the opposite
+
+            Task.Run(() => SnmpSet_Async(ch.OID, newValue,
+                IP_Address, GlobalCancelToken)).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Read and copy all channel values from hardware. 
+        /// </summary>
+        /// <returns>Async Task</returns>
+        private async Task GetInitialValues()
+        {
+            string sTo = "1";
+            string sIP = IP_Address;
+            string sOID, s;
+            int AnalogChanVal, PreviewByteValue;
+
+            try
+            {
+                for (int PortIndex = 0; PortIndex < Util.NUMBER_OF_DIGITAL_PORTS; PortIndex++)
+                {
+                    if (PortIndex == 0)
+                        sOID = ChannelHelper.Io1_All.ToString();
+                    else if (PortIndex == 1)
+                        sOID = ChannelHelper.Io2_All.ToString();
                     else
+                        sOID = ChannelHelper.Io2_All.ToString();
+
+                    // Read all channels simultaneously
+                    PreviewByteValue = await Util.SnmpGetDigitalValues(sIP, sOID, sTo);
+
+                    if (PreviewByteValue > -1)
                     {
-                         AnalogTimer.AutoReset = false;
-                         AnalogTimer.Interval = AnalogInputRefreshInMs;
-                         AnalogTimer.Enabled = true;
+                        // Compare current and just read channel values - if values have changed
+                        if ((DigitalPorts[PortIndex].ChannelsByteValue != PreviewByteValue))
+                        {
+                            // value has changed
+                            char[] newVals = Util.FromIntToChars(PreviewByteValue, 8);
+
+                            for (int ChannelIndex = 0; ChannelIndex < DigitalPorts[PortIndex].DigitalChannels.Count; ChannelIndex++)
+                            {
+                                if (newVals[ChannelIndex] != '0')
+                                {
+                                    // update object value
+                                    DigitalPorts[PortIndex].DigitalChannels[ChannelIndex].SetState(ChannelState.ON);
+
+                                    onDigitalInput?.Invoke(this, new DigitalInputEventArgs(BoardID,
+                                        DigitalPorts[PortIndex].IoPortNo, DigitalPorts[PortIndex].DigitalChannels[ChannelIndex]));
+                                }
+                            }
+                        }
                     }
-               }
+                }
 
-               return AnalogTimer.Enabled ? true : false;
-          }
+                // only supports 1 analog list
+                if (AnalogPorts.Count > 0)
+                {
+                    sOID = ChannelHelper.Ad1_Ch1.ToString();
+                    AnalogChanVal = await Util.SnmpGetAnalogValue(sIP, sOID, sTo);
+                    AnalogPorts[0].AnalogChannels[0].SetValue(AnalogChanVal);
+                    Debug.Print("GetAnaVal(1) - " + AnalogChanVal);
 
-          // This is the timer tick code. Executes every (_DigitalInputRefreshInMs) milliseconds
-          private void DigitalTimer_OnTick(object sender, ElapsedEventArgs e)
-          {
-               // Stil have to nail this damn tomer down
-               try
-               {
-                    GlobalCancelToken.ThrowIfCancellationRequested();
-                    Debug.Print("DTICK ID: " + BoardID);
-                    Task.Run(() => CheckForNewDigitalData_Async(DigitalPortsList, GlobalCancelToken));
-                    dTaskID = Task.CurrentId;
+                    sOID = ChannelHelper.Ad1_Ch2.ToString();
+                    AnalogChanVal = await Util.SnmpGetAnalogValue(sIP, sOID, sTo);
+                    AnalogPorts[0].AnalogChannels[1].SetValue(AnalogChanVal);
+                    Debug.Print("GetAnaVal(2) - " + AnalogChanVal);
 
+                    sOID = ChannelHelper.Ad1_Ch3.ToString();
+                    AnalogChanVal = await Util.SnmpGetAnalogValue(sIP, sOID, sTo);
+                    AnalogPorts[0].AnalogChannels[2].SetValue(AnalogChanVal);
+                    Debug.Print("GetAnaVal(3) - " + AnalogChanVal);
 
-                    task_DigitalTimer = Task.Factory.StartNew(() =>
-                        CheckForNewDigitalData_Async(DigitalPortsList, GlobalCancelToken).ConfigureAwait(false),
-                        GlobalCancelToken, TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
-               }
+                    sOID = ChannelHelper.Ad1_Ch4.ToString();
+                    AnalogChanVal = await Util.SnmpGetAnalogValue(sIP, sOID, sTo);
+                    AnalogPorts[0].AnalogChannels[3].SetValue(AnalogChanVal);
+                    Debug.Print("GetAnaVal(4) - " + AnalogChanVal);
+                }
 
-               catch (AggregateException ex)
-               {
-                    if (Utilities.IsRealError(ex))
+            }
+            catch (AggregateException ex)
+            {
+                if (Util.IsRealError(ex))
+                {
+                    if (onAsyncError != null)
+                        onAsyncError(this, new AsyncErrorEventArgs(ex));
+                    else
+                        Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions
+                            .Select(er => er.Message));
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Util.IsRealError(ex))
+                {
+                    if (onError != null)
+                        onError(this, new ErrorEventArgs(ex));
+                    else
+                        Debug.Print("Unhandled Error: " + ex.Message);
+                }
+            }
+        }
+
+        private async Task CheckForNewDigitalData()
+        {
+            // only reading port 2
+            char[] PreviewChanVals = null;
+            int PreviewByteValue;
+            //EthernetBoardPort port1 = DigitalPorts[0];
+            EthernetBoardPort port2 = DigitalPorts[1];
+            string sIp = IP_Address;
+            string sTo = Util.SNMP_GET_TIMEOUT.ToString();
+            string sOid, s;
+
+            //******************************* SCAN PORT *******************************************//
+            // check each channel in the port for updated data (button values)                     //
+            // Compare it to DigitalPorts list. Update list if new values are found            //
+            //*************************************************************************************//
+            try
+            {
+
+                sOid = ChannelHelper.Io2_All.ToString();
+
+                // Read all channels simultaneously
+                PreviewByteValue = await Util.SnmpGetDigitalValues(sIp, sOid, sTo);
+
+                if (PreviewByteValue > -1)
+                {
+                    // Debug stuff
+                    PreviewChanVals = Util.FromIntToChars(PreviewByteValue, 8);
+                    s = new string(PreviewChanVals);
+                    Debug.Print("CheckForNewDigitalData. PreviewByteValue: " + PreviewByteValue + " - Binary String: " + s);
+
+                    // Compare current and just read channel values - if values have changed
+                    if (port2.ChannelsByteValue != PreviewByteValue)
                     {
-                         if (onAsyncError != null)
-                              onAsyncError(this, new AsyncErrorEventArgs(ex));
-                         else
-                              Debug.Print("Unhandled Error: " +
-                                  ex.Flatten().InnerExceptions.Select(er => er.Message));
+                        // value has changed
+                        char[] oldVals = Util.FromIntToChars(port2.ChannelsByteValue, 8);
+                        char[] newVals = Util.FromIntToChars(PreviewByteValue, 8);
+                        port2.ChannelsByteValue = PreviewByteValue;
+
+                        for (int ChannelIndex = 0; ChannelIndex < PreviewChanVals.Length; ChannelIndex++)
+                        {
+                            if (oldVals[ChannelIndex] != newVals[ChannelIndex])
+                            {
+                                // Debug stuff
+                                PreviewChanVals = Util.FromIntToChars(PreviewByteValue, 8);
+                                s = new string(PreviewChanVals);
+                                Debug.Print("New Value! " + IP_Address + " " + sOid + " value: "
+                                    + newVals[ChannelIndex]);
+
+                                // update object value
+                                port2.DigitalChannels[ChannelIndex].ToggleState();
+
+                                onDigitalInput?.Invoke(this, new DigitalInputEventArgs(BoardID, port2.IoPortNo,
+                                        port2.DigitalChannels[ChannelIndex]));
+
+                                // update interface
+                                //if (onDigitalInput != null)
+                                //{
+                                //    App.Current.Dispatcher.Invoke(onDigitalInput,
+                                //        new DigitalInputEventArgs(BoardID, DigitalPorts[PortIndex].IoPortNo,
+                                //        DigitalPorts[PortIndex].DigitalChannels[ChannelIndex]));
+                                //}
+                            }
+                        }
                     }
-               }
-               catch (Exception ex)
-               {
-                    if (Utilities.IsRealError(ex))
+                }
+
+                PreviewChanVals = null;
+            }
+            catch (AggregateException ex)
+            {
+                if (Util.IsRealError(ex))
+                {
+                    Debug.Print("Unhandled Error: " +
+                        ex.Flatten().InnerExceptions.Select(er => er.Message));
+                }
+            }
+            catch (Exception ex)
+            {
+                if (ex is TaskCanceledException)
+                {
+                    Debug.Print("ATASK CANCELLED");
+                }
+
+                if (Util.IsRealError(ex))
+                {
+                    Debug.Print("Unhandled Error: " + ex.Message);
+                }
+            }
+        }
+
+        private async Task CheckForNewAnalogData()
+        {
+            int NewChannelValue;
+            EthernetBoardPort algPort = AnalogPorts[0];
+            string sIp = algPort.ParentIP;
+            string sOid = ChannelHelper.Ad1_All.ToString();
+            string sTo = Util.SNMP_GET_TIMEOUT.ToString();
+            AnalogChannel Chan;
+
+            //******************************* SCAN PORT *******************************************//
+            // check each channel in the port for updated data (button values)                     //
+            // Compare it to AnalogPorts list. Update list if new values are found              //
+            //*************************************************************************************//
+            try
+            {
+                NewChannelValue = await Util.SnmpGetAnalogValue(ChannelHelper.Ad1_Ch1.ToString(), sOid, sTo);
+
+                if (NewChannelValue != algPort.AnalogChannels.ElementAt(0).Value) // Light has new value
+                {
+                    Chan = algPort.AnalogChannels.ElementAt(0);
+                    Chan.SetValue(NewChannelValue);
+
+                    if (onAnalogInput != null)
                     {
-                         if (onError != null)
-                              onError(this, new ErrorEventArgs(ex));
-                         else
-                              Debug.Print("Unhandled Error: " + ex.Message);
+                        onAnalogInput?.Invoke(onAnalogInput,
+                            new AnalogInputEventArgs(algPort.ParentID, algPort.IoPortNo, Chan));
                     }
-               }
-          }
+                }
 
-          private void AnalogTimer_OnTick(object sender, ElapsedEventArgs e)
-          {
-               try
-               {
-                    GlobalCancelToken.ThrowIfCancellationRequested();
-                    Debug.Print("ATICK");
+                NewChannelValue = await Util.SnmpGetAnalogValue(ChannelHelper.Ad1_Ch2.ToString(), sOid, sTo);
 
-                    Task.Run(() => CheckForNewAnalogData_Async(AnalogPortsList, GlobalCancelToken));
+                if (NewChannelValue != algPort.AnalogChannels.ElementAt(1).Value) // Light has new value
+                {
+                    Chan = algPort.AnalogChannels.ElementAt(1);
+                    Chan.SetValue(NewChannelValue);
 
-                    //task_AnalogTimer = Task.Factory.StartNew(() =>
-                    //    CheckForNewAnalogData_Async(AnalogPortsList, GlobalCancelToken).ConfigureAwait(false),
-                    //    GlobalCancelToken, TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
-               }
-               catch (AggregateException ex)
-               {
-                    if (Utilities.IsRealError(ex))
+                    if (onAnalogInput != null)
                     {
-                         if (onAsyncError != null)
-                              onAsyncError(this, new AsyncErrorEventArgs(ex));
-                         else
-                              Debug.Print("Unhandled Error: " +
-                                  ex.Flatten().InnerExceptions.Select(er => er.Message));
+                        onAnalogInput?.Invoke(onAnalogInput,
+                            new AnalogInputEventArgs(algPort.ParentID, algPort.IoPortNo, Chan));
                     }
-               }
-               catch (Exception ex)
-               {
-                    if (Utilities.IsRealError(ex))
+                }
+
+                NewChannelValue = await Util.SnmpGetAnalogValue(ChannelHelper.Ad1_Ch3.ToString(), sOid, sTo);
+
+                if (NewChannelValue != algPort.AnalogChannels.ElementAt(2).Value) // Light has new value
+                {
+                    Chan = algPort.AnalogChannels.ElementAt(2);
+                    Chan.SetValue(NewChannelValue);
+
+                    if (onAnalogInput != null)
                     {
-                         if (onError != null)
-                              onError(this, new ErrorEventArgs(ex));
-                         else
-                              Debug.Print("Unhandled Error: " + ex.Message);
+                        onAnalogInput?.Invoke(onAnalogInput,
+                            new AnalogInputEventArgs(algPort.ParentID, algPort.IoPortNo, Chan));
                     }
-               }
+                }
 
-          }
+                NewChannelValue = await Util.SnmpGetAnalogValue(ChannelHelper.Ad1_Ch4.ToString(), sOid, sTo);
 
-          private async Task CheckForNewDigitalData_Async(object state, CancellationToken ct)
-          {
-               List<EthernetBoardPort> lstBrd = (List<EthernetBoardPort>)state;
+                if (NewChannelValue != algPort.AnalogChannels.ElementAt(3).Value) // Light has new value
+                {
+                    Chan = algPort.AnalogChannels.ElementAt(3);
+                    Chan.SetValue(NewChannelValue);
 
-               string getResult = null;
-               string setResult = null;
-               //ObjectIdentifier[] _OidVals = null; //new[] { lstBrd.SelectMany(port => port.ChannelsList };
-               int NewChannelValue;
-
-               //******************************* SCAN PORT *******************************************//
-               // check each channel in the port for updated data (button values)                     //
-               // Compare it to CurrentDigitalChannelValues list. Update list if new values are found //
-               //*************************************************************************************//           
-
-               foreach (EthernetBoardPort pt in lstBrd)
-               {
-                    // Array of ObjectIdentifiers for the OIDs
-                    //_OidVals = pt.ChannelsList.Select(c => c.OID).ToArray();
-
-                    foreach (Channel ch in pt.ChannelsList)
+                    if (onAnalogInput != null)
                     {
-                         ct.ThrowIfCancellationRequested();
-
-                         getResult = null;
-                         setResult = null;
-
-                         try
-                         {
-                              //getResult = await Task.Run(() => SnmpGet_Async(ch));
-                              getResult = await TaskTools.RetryOnFault(() => SnmpTools.SnmpGet_Async(ch.OID, IP_Address, ct), 2).ConfigureAwait(false);
-
-                              if (getResult != null && getResult != string.Empty)
-                              {
-                                   if (int.TryParse(getResult, out NewChannelValue))
-                                   {
-                                        if (NewChannelValue != ch.Value) // Light is on/off!!
-                                        {
-                                             Debug.Print("NEW DIG LIGHT VALUE!!!!");
-
-                                             ct.ThrowIfCancellationRequested();
-
-                                             lock (pt) // Lock Port
-                                             {
-                                                  //setResult = await Task.Run(() => SnmpSet_Async(ch, NewChannelValue));
-                                                  //setResult = TaskTools.RetryOnFault(() => SnmpSet_Async(ch, NewChannelValue), 3);
-                                                  setResult = SnmpTools.SnmpSet(ch.OID, IP_Address, NewChannelValue, ct);
-
-                                                  if (setResult != null && setResult != string.Empty)
-                                                  {
-                                                       ch.State = (NewChannelValue == 0 ? ChannelState.OFF : ChannelState.ON);
-
-                                                       // do user interface stuff 
-                                                       if (onDigitalInput != null)
-                                                            onDigitalInput(BoardID, pt.IoPortNo, ch);
-                                                  }
-                                             }
-                                        }
-                                   }
-                              }
-                         }
-                         catch (AggregateException ex)
-                         {
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onAsyncError != null)
-                                        onAsyncError(this, new AsyncErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " +
-                                            ex.Flatten().InnerExceptions.Select(er => er.Message));
-                              }
-                         }
-                         catch (Exception ex)
-                         {
-                              if (ex is TaskCanceledException)
-                              {
-                                   Debug.Print("DTASK CANCELLED");
-                                   return;
-                              }
-
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onError != null)
-                                        onError(this, new ErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " + ex.Message);
-                              }
-                         }
+                        onAnalogInput?.Invoke(onAnalogInput,
+                            new AnalogInputEventArgs(algPort.ParentID, algPort.IoPortNo, Chan));
                     }
-               }
+                }
+            }
+            catch (AggregateException ex)
+            {
+                if (Util.IsRealError(ex))
+                {
+                    Debug.Print("Unhandled Error: " +
+                        ex.Flatten().InnerExceptions.Select(er => er.Message));
+                }
+            }
+            catch (Exception ex)
+            {
+                if (ex is TaskCanceledException)
+                {
+                    Debug.Print("ATASK CANCELLED");
+                }
 
-               DigitalTimer.Enabled = true;
-          }
+                if (Util.IsRealError(ex))
+                {
+                    Debug.Print("Unhandled Error: " + ex.Message);
+                }
+            }
+        }
 
-          private async Task CheckForNewAnalogData_Async(object state, CancellationToken ct)
-          {
-               string getResult = null;
-               string setResult = null;
-               int NewChannelValue;
+        public void ToggleDigitalPolling()
+        {
+            if (IsActive)
+            {
+                Cancel = true;
+            }
+            else
+            {
+                StartDigitalPolling();
+            }
+        }
 
-               List<EthernetBoardPort> lstBrd = (List<EthernetBoardPort>)state;
+        public void ToggleAnalogPolling()
+        {
+            if (IsActive)
+            {
+                Cancel = true;
+            }
+            else
+            {
+                StartAnalogPolling();
+            }
+        }
 
-               //******************************* SCAN PORT *******************************************//
-               // check each channel in the port for updated data (button values)                     //
-               // Compare it to AnalogPortsList list. Update list if new values are found              //
-               //*************************************************************************************//
+        public async Task StartDigitalPolling()
+        {
+            // run a loop reading the channels each iteration
+            // until a cancel is received.
 
-               foreach (EthernetBoardPort pt in lstBrd)
-               {
-                    // Array of ObjectIdentifiers for the OIDs
-                    //_OidVals = pt.ChannelsList.Select(c => c.OID).ToArray();
+            while (!GlobalCancelToken.IsCancellationRequested)
+            {
+                //Task myTask = new Task(Utilities.SnmpGetDigital(;
+                // read live channel values
+                await CheckForNewDigitalData();
+                // compare these channels to the current values
+            }
+        }
 
-                    ct.ThrowIfCancellationRequested();
+        public void StartAnalogPolling()
+        {
+            // run a loop reading the channels each iteration
+            // until a cancel is received.
 
-                    foreach (Channel ch in pt.ChannelsList)
-                    {
-                         getResult = null;
-                         setResult = null;
+            while (!GlobalCancelToken.IsCancellationRequested)
+            {
+                //Task myTask = new Task(Utilities.SnmpGetDigital(;
+                // read live channel values
+                CheckForNewAnalogData();
+                // compare these channels to the current values
+            }
+        }
 
-                         try
-                         {
-                              ct.ThrowIfCancellationRequested();
+        #endregion
 
-                              //getResult = await TaskTools.RetryOnFault(() => SnmpGet_Async(_OidVals[ch.Id - 1], ct), 2).ConfigureAwait(false);
-                              getResult = await Task.Run(() => SnmpTools.SnmpGet_Async(ch.OID, IP_Address, ct)).ConfigureAwait(false);
+        #region CleanUpMethods
 
-                              if (getResult != null && getResult != string.Empty)
-                              {
-                                   if (int.TryParse(getResult, out NewChannelValue))
-                                   {
-                                        if (NewChannelValue != ch.Value) // Light has new value
-                                        {
-                                             Debug.Print("NEW ANALOG LIGHT VALUE!!!!");
+        ~EthernetBoard()
+        {
+            // free native resources if there are any.
+            if (nativeResource != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(nativeResource);
+                nativeResource = IntPtr.Zero;
+            }
+        }
 
-                                             lock (this)
-                                             {
-                                                  setResult = SnmpTools.SnmpSet(ch.OID, IP_Address, NewChannelValue, ct);
+        public void Dispose()
+        {
+            GC.ReRegisterForFinalize(this);
+        }
 
-                                                  if (setResult != null && setResult != string.Empty)
-                                                  {
-                                                       ch.State = (NewChannelValue == 0 ? ChannelState.OFF : ChannelState.ON);
+        #endregion
 
-                                                       if (onAnalogInput != null)
-                                                            onAnalogInput(BoardID, pt.IoPortNo, ch);
-                                                  }
-                                             }
-                                        }
-                                   }
-                              }
-                         }
-                         catch (AggregateException ex)
-                         {
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onAsyncError != null)
-                                        onAsyncError(this, new AsyncErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " +
-                                            ex.Flatten().InnerExceptions.Select(er => er.Message));
-                              }
-                         }
-                         catch (Exception ex)
-                         {
-                              if (ex is TaskCanceledException)
-                              {
-                                   Debug.Print("ATASK CANCELLED");
-                                   return;
-                              }
+        #region Snmp Methods
 
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onError != null)
-                                        onError(this, new ErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " + ex.Message);
-                              }
-                         }
-                    }
-               }
+        /// <summary>Updates the EthernetBoard.Port.Channel value of a device.</summary>
+        /// <returns>(List) of type Variable (octet dictionary) </returns>
+        public static async Task<string> SnmpSet_Async(ObjectIdentifier pOid, int pNewChannelValue, string pIp, CancellationToken ct)
+        {
+            // use TPL 
+            string retVal = null;
+            IPEndPoint Ep = new IPEndPoint(IPAddress.Parse(pIp), Util.LISTEN_PORT);
+            IList<Variable> result = null;
+            List<Variable> lstVar = new List<Variable>();
+            lstVar.Add(new Variable(pOid, new Integer32(pNewChannelValue)));
 
-               AnalogTimer.Enabled = true;
-          }
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                result = null;
 
+                // This wrapper is super IMPORTANT recheck convention
+                await Task.Run(() =>
+                {
+                    result = Messenger.Set(VersionCode.V1, Ep,
+                         new OctetString(Util.COMMUNITY), lstVar, Util.SNMP_SET_TIMEOUT);
+                }, ct).ConfigureAwait(false);
+            }
+            catch (AggregateException ex)
+            {
+                if (Util.IsRealError(ex))
+                {
+                    Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions.Select(er => er.Message));
+                    throw;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Util.IsRealError(ex))
+                {
+                    Debug.Print("Unhandled Error: " + ex.Message);
+                    throw;
+                }
+            }
+            if (result != null && result.Count > 0)
+                retVal = result[0].Data.ToString();
+            else
+                retVal = string.Empty;
 
+            return retVal;
+        }
 
-          #endregion
+        #endregion
 
-          #region NotCurrentlyUsed
+        #region NotCurrentlyUsed
 
-          public void LogStuff(string msg)
-          {
-               if (onLoggingRaised != null)
-                    onLoggingRaised(msg, "#FF0000");
-          }
+        public void LogStuff(string msg)
+        {
+            if (onLoggingRaised != null)
+                onLoggingRaised(msg, "#FF0000");
+        }
 
-          private void OutputInfo(string msg, string OID, string chValue)
-          {
-               Debug.Print("OutputInfo: " + msg + " OID: " + OID + " Value: " + chValue);
-          }
+        private void OutputInfo(string msg, string OID, string chValue)
+        {
+            Debug.Print("OutputInfo: " + msg + " OID: " + OID + " Value: " + chValue);
+        }
 
-
-          #endregion
-
-
-
-          // 8888888888888 BEYONF DHD HERE TEST FUNCTIONS
-
-          // just async - shouldnt block
-
-          /// <summary>
-          /// Parallel no inner task - Async 
-          /// </summary>
-          /// <returns></returns>
-          public string GetInitialValues_Parallel(CancellationToken ct)
-          {
-               System.Text.StringBuilder sb = new System.Text.StringBuilder();
-               string result = null;
-               int retValue;
-
-               sw4.Start();
-               if (DigitalPortsList != null)
-               {
-                    try
-                    {
-                         // Run all tasks parallel wait for them to finish
-                         Parallel.ForEach(DigitalPortsList[0].ChannelsList, async ch =>
-                         {
-                              result = null;
-                              result = await SnmpTools.SnmpGet_Async(ch.OID, IP_Address, GlobalCancelToken).ConfigureAwait(false);
-
-                              if (result != null && int.TryParse(result, out retValue))
-                              {
-                                   Debug.Print(sb.Append("Channel Io1 ID: ").Append(ch.Id).Append(" Value: ").AppendLine(result).ToString());
-
-                                   if (onDigitalInput != null)
-                                        onDigitalInput(BoardID, DigitalPortsList[0].IoPortNo, ch);
-                              }
-                         });
-                    }
-                    catch (AggregateException ex)
-                    {
-                         if (Utilities.IsRealError(ex))
-                         {
-                              if (onAsyncError != null)
-                                   onAsyncError(this, new AsyncErrorEventArgs(ex));
-                              else
-                                   Debug.Print("Unhandled Error: " + ex.Flatten().InnerExceptions.Select(er => er.Message));
-                         }
-                    }
-                    catch (Exception ex)
-                    {
-                         if (Utilities.IsRealError(ex))
-                         {
-                              if (onError != null)
-                                   onError(this, new ErrorEventArgs(ex));
-                              else
-                                   Debug.Print("Unhandled Error: " + ex.Message);
-                         }
-                    }
-
-                    if (DigitalPortsList != null)
-                    {
-                         try
-                         {
-                              // Run all tasks parallel wait for them to finish
-                              Parallel.ForEach(DigitalPortsList[1].ChannelsList, async ch =>
-                              {
-                                   result = await SnmpTools.SnmpGet_Async(ch.OID, IP_Address, GlobalCancelToken).ConfigureAwait(false);
-
-                                   if (result != null && int.TryParse(result, out retValue))
-                                   {
-                                        Debug.Print(sb.Append("Channel Io2 ID: ").Append(ch.Id).Append(" VAlue: ").AppendLine(result).ToString());
-
-                                        if (onDigitalInput != null)
-                                             onDigitalInput(BoardID, DigitalPortsList[1].IoPortNo, ch);
-                                   }
-                              });
-                         }
-                         catch (AggregateException ex)
-                         {
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onAsyncError != null)
-                                        onAsyncError(this, new AsyncErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " +
-                                            ex.Flatten().InnerExceptions.Select(er => er.Message));
-                              }
-                         }
-                         catch (Exception ex)
-                         {
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onError != null)
-                                        onError(this, new ErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " + ex.Message);
-                              }
-                         }
-                    }
-
-                    if (AnalogPortsList != null)
-                    {
-                         try
-                         {
-                              // Run all tasks parallel wait for them to finish
-                              Parallel.ForEach(AnalogPortsList[0].ChannelsList, async ch =>
-                              {
-                                   result = await SnmpTools.SnmpGet_Async(ch.OID, IP_Address, ct).ConfigureAwait(false);
-
-                                   if (result != null && int.TryParse(result, out retValue))
-                                   {
-                                        Debug.Print(sb.Append("Channel Adc1 ID: ").Append(ch.Id).Append(" Value: ").AppendLine(result).ToString());
-
-                                        if (onAnalogInput != null)
-                                             onAnalogInput(BoardID, AnalogPortsList[0].IoPortNo, ch);
-                                   }
-                              });
-                         }
-                         catch (AggregateException ex)
-                         {
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onAsyncError != null)
-                                        onAsyncError(this, new AsyncErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " +
-                                            ex.Flatten().InnerExceptions.Select(er => er.Message));
-                              }
-                         }
-                         catch (Exception ex)
-                         {
-                              if (Utilities.IsRealError(ex))
-                              {
-                                   if (onError != null)
-                                        onError(this, new ErrorEventArgs(ex));
-                                   else
-                                        Debug.Print("Unhandled Error: " + ex.Message);
-                              }
-                         }
-                    }
-               }
-
-               return sb.ToString();
-          }
-
-
-
-     }
+        #endregion
+    }
 }

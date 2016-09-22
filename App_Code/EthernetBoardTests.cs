@@ -49,42 +49,42 @@ namespace snmpd
           //    try
           //    {
           //        IWorkItemResult<string> wir0 = _DigPort1_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPortsList[0].channels[0]);
+          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPorts[0].channels[0]);
 
           //        IWorkItemResult<string> wir1 = _DigPort1_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPortsList[0].channels[1]);
+          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPorts[0].channels[1]);
 
           //        IWorkItemResult<string> wir2 = _DigPort1_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, Task<string>(SnmpGet), this.DigitalPortsList[0].channels[2]);
+          //                  new Amib.Threading.Func<Channel, Task<string>(SnmpGet), this.DigitalPorts[0].channels[2]);
 
           //        IWorkItemResult<string> wir3 = _DigPort1_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPortsList[0].channels[3]);
+          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPorts[0].channels[3]);
 
           //        IWorkItemResult<string> wir4 = _DigPort1_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPortsList[0].channels[4]);
+          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPorts[0].channels[4]);
 
           //        IWorkItemResult<string> wir5 = _DigPort1_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPortsList[0].channels[5]);
+          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPorts[0].channels[5]);
 
           //        IWorkItemResult<string> wir6 = _DigPort1_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPortsList[0].channels[6]);
+          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPorts[0].channels[6]);
 
           //        IWorkItemResult<string> wir7 = _DigPort1_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPortsList[0].channels[7]);
+          //                  new Amib.Threading.Func<Channel, Task<string>>(SnmpGet), this.DigitalPorts[0].channels[7]);
 
           //        bool success = SmartThreadPool.WaitAll(new IWorkItemResult<string>[]
           //            { wir0, wir1, wir2, wir3, wir4, wir5, wir6, wir7 });
 
           //        if (success)
           //        {
-          //            this.DigitalPortsList[0].channels[0].Value = Convert.ToInt32(wir0.Result);
-          //            this.DigitalPortsList[0].channels[1].Value = Convert.ToInt32(wir1.Result);
-          //            this.DigitalPortsList[0].channels[2].Value = Convert.ToInt32(wir2.Result);
-          //            this.DigitalPortsList[0].channels[3].Value = Convert.ToInt32(wir3.Result);
-          //            this.DigitalPortsList[0].channels[4].Value = Convert.ToInt32(wir4.Result);
-          //            this.DigitalPortsList[0].channels[5].Value = Convert.ToInt32(wir5.Result);
-          //            this.DigitalPortsList[0].channels[6].Value = Convert.ToInt32(wir6.Result);
-          //            this.DigitalPortsList[0].channels[7].Value = Convert.ToInt32(wir7.Result);
+          //            this.DigitalPorts[0].channels[0].Value = Convert.ToInt32(wir0.Result);
+          //            this.DigitalPorts[0].channels[1].Value = Convert.ToInt32(wir1.Result);
+          //            this.DigitalPorts[0].channels[2].Value = Convert.ToInt32(wir2.Result);
+          //            this.DigitalPorts[0].channels[3].Value = Convert.ToInt32(wir3.Result);
+          //            this.DigitalPorts[0].channels[4].Value = Convert.ToInt32(wir4.Result);
+          //            this.DigitalPorts[0].channels[5].Value = Convert.ToInt32(wir5.Result);
+          //            this.DigitalPorts[0].channels[6].Value = Convert.ToInt32(wir6.Result);
+          //            this.DigitalPorts[0].channels[7].Value = Convert.ToInt32(wir7.Result);
           //        }
 
           //    }
@@ -103,28 +103,28 @@ namespace snmpd
           //    {
 
           //        IWorkItemResult<string> wir0 = _DigPort2_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPortsList[1].channels[0]);
+          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPorts[1].channels[0]);
 
           //        IWorkItemResult<string> wir1 = _DigPort2_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPortsList[1].channels[1]);
+          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPorts[1].channels[1]);
 
           //        IWorkItemResult<string> wir2 = _DigPort2_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPortsList[1].channels[2]);
+          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPorts[1].channels[2]);
 
           //        IWorkItemResult<string> wir3 = _DigPort2_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPortsList[1].channels[3]);
+          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPorts[1].channels[3]);
 
           //        IWorkItemResult<string> wir4 = _DigPort2_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPortsList[1].channels[4]);
+          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPorts[1].channels[4]);
 
           //        IWorkItemResult<string> wir5 = _DigPort2_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPortsList[1].channels[5]);
+          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPorts[1].channels[5]);
 
           //        IWorkItemResult<string> wir6 = _DigPort2_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPortsList[1].channels[6]);
+          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPorts[1].channels[6]);
 
           //        IWorkItemResult<string> wir7 = _DigPort2_Pool.QueueWorkItem(
-          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPortsList[1].channels[7]);
+          //                  new Amib.Threading.Func<Channel, string>(SnmpGet), this.DigitalPorts[1].channels[7]);
 
           //        // wait for them all to complete
           //        bool success = SmartThreadPool.WaitAll(new IWorkItemResult<string>[] { wir0, wir1, wir2, wir3, wir4, wir5, wir6, wir7 });
@@ -145,35 +145,35 @@ namespace snmpd
           //            // now call SmnpSET
           //            IWorkItemResult<string> wirA = _DigPort2_Pool.QueueWorkItem(
           //                           new Amib.Threading.Func<Channel, int, string>
-          //                                (SnmpSet), this.DigitalPortsList[1].channels[0], lstValues.IndexOf(0));
+          //                                (SnmpSet), this.DigitalPorts[1].channels[0], lstValues.IndexOf(0));
 
           //            IWorkItemResult<string> wirB = _DigPort2_Pool.QueueWorkItem(
           //                      new Amib.Threading.Func<Channel, int, string>
-          //                           (SnmpSet), this.DigitalPortsList[1].channels[1], lstValues.IndexOf(1));
+          //                           (SnmpSet), this.DigitalPorts[1].channels[1], lstValues.IndexOf(1));
 
           //            IWorkItemResult<string> wirC = _DigPort2_Pool.QueueWorkItem(
           //                      new Amib.Threading.Func<Channel, int, string>
-          //                           (SnmpSet), this.DigitalPortsList[1].channels[2], lstValues.IndexOf(2));
+          //                           (SnmpSet), this.DigitalPorts[1].channels[2], lstValues.IndexOf(2));
 
           //            IWorkItemResult<string> wirD = _DigPort2_Pool.QueueWorkItem(
           //                      new Amib.Threading.Func<Channel, int, string>
-          //                           (SnmpSet), this.DigitalPortsList[1].channels[3], lstValues.IndexOf(3));
+          //                           (SnmpSet), this.DigitalPorts[1].channels[3], lstValues.IndexOf(3));
 
           //            IWorkItemResult<string> wirE = _DigPort2_Pool.QueueWorkItem(
           //                      new Amib.Threading.Func<Channel, int, string>
-          //                           (SnmpSet), this.DigitalPortsList[1].channels[4], lstValues.IndexOf(4));
+          //                           (SnmpSet), this.DigitalPorts[1].channels[4], lstValues.IndexOf(4));
 
           //            IWorkItemResult<string> wirF = _DigPort2_Pool.QueueWorkItem(
           //                      new Amib.Threading.Func<Channel, int, string>
-          //                           (SnmpSet), this.DigitalPortsList[1].channels[5], lstValues.IndexOf(5));
+          //                           (SnmpSet), this.DigitalPorts[1].channels[5], lstValues.IndexOf(5));
 
           //            IWorkItemResult<string> wirG = _DigPort2_Pool.QueueWorkItem(
           //                      new Amib.Threading.Func<Channel, int, string>
-          //                           (SnmpSet), this.DigitalPortsList[1].channels[6], lstValues.IndexOf(6));
+          //                           (SnmpSet), this.DigitalPorts[1].channels[6], lstValues.IndexOf(6));
 
           //            IWorkItemResult<string> wirH = _DigPort2_Pool.QueueWorkItem(
           //                      new Amib.Threading.Func<Channel, int, string>
-          //                           (SnmpSet), this.DigitalPortsList[1].channels[7], lstValues.IndexOf(7));
+          //                           (SnmpSet), this.DigitalPorts[1].channels[7], lstValues.IndexOf(7));
           //        }
 
           //        sw.Stop();
@@ -194,19 +194,19 @@ namespace snmpd
           //    {
           //        IWorkItemResult<string> wir0 = _AlgPort1_Pool.QueueWorkItem(
           //             new Amib.Threading.Func<Channel, string>(SnmpGet),
-          //             this.AnalogPortsList[0].channels[0]);
+          //             this.AnalogPorts[0].channels[0]);
 
           //        IWorkItemResult<string> wir1 = _AlgPort1_Pool.QueueWorkItem(
           //             new Amib.Threading.Func<Channel, string>(SnmpGet),
-          //             this.AnalogPortsList[0].channels[1]);
+          //             this.AnalogPorts[0].channels[1]);
 
           //        IWorkItemResult<string> wir2 = _AlgPort1_Pool.QueueWorkItem(
           //             new Amib.Threading.Func<Channel, string>(SnmpGet),
-          //             this.AnalogPortsList[0].channels[2]);
+          //             this.AnalogPorts[0].channels[2]);
 
           //        IWorkItemResult<string> wir3 = _AlgPort1_Pool.QueueWorkItem(
           //             new Amib.Threading.Func<Channel, string>(SnmpGet),
-          //             this.AnalogPortsList[0].channels[3]);
+          //             this.AnalogPorts[0].channels[3]);
 
           //        bool success = SmartThreadPool.WaitAll(new IWorkItemResult<string>[] { wir0, wir1, wir2, wir3 });
 
@@ -215,26 +215,26 @@ namespace snmpd
           //            int[] results = { Convert.ToInt32(wir0.Result), Convert.ToInt32(wir1.Result),
           //            Convert.ToInt32(wir2.Result), Convert.ToInt32(wir3.Result) };
 
-          //            this.AnalogPortsList[0].channels[0].Value = results[0];
-          //            this.AnalogPortsList[0].channels[1].Value = results[1];
-          //            this.AnalogPortsList[0].channels[2].Value = results[2];
-          //            this.AnalogPortsList[0].channels[3].Value = results[3];
+          //            this.AnalogPorts[0].channels[0].Value = results[0];
+          //            this.AnalogPorts[0].channels[1].Value = results[1];
+          //            this.AnalogPorts[0].channels[2].Value = results[2];
+          //            this.AnalogPorts[0].channels[3].Value = results[3];
 
           //            IWorkItemResult<string> wi0 = _AlgPort1_Pool.QueueWorkItem(
           //                      new Amib.Threading.Func<Channel, int, string>
-          //                           (SnmpSet), this.AnalogPortsList[0].channels[0], results[0]);
+          //                           (SnmpSet), this.AnalogPorts[0].channels[0], results[0]);
 
           //            IWorkItemResult<string> wi1 = _AlgPort1_Pool.QueueWorkItem(
           //                      new Amib.Threading.Func<Channel, int, string>
-          //                           (SnmpSet), this.AnalogPortsList[0].channels[1], results[1]);
+          //                           (SnmpSet), this.AnalogPorts[0].channels[1], results[1]);
 
           //            IWorkItemResult<string> wi2 = _AlgPort1_Pool.QueueWorkItem(
           //                      new Amib.Threading.Func<Channel, int, string>
-          //                           (SnmpSet), this.AnalogPortsList[0].channels[2], results[2]);
+          //                           (SnmpSet), this.AnalogPorts[0].channels[2], results[2]);
 
           //            IWorkItemResult<string> wi3 = _AlgPort1_Pool.QueueWorkItem(
           //                      new Amib.Threading.Func<Channel, int, string>
-          //                           (SnmpSet), this.AnalogPortsList[0].channels[3], results[3]);
+          //                           (SnmpSet), this.AnalogPorts[0].channels[3], results[3]);
           //        }
 
           //        sw.Stop();
@@ -302,8 +302,8 @@ namespace snmpd
 
           //     Debug.Print("InitGetValues_AsyncRetry BEGIN--------");
 
-          //     foreach (EthernetBoardPort pt in DigitalPortsList)
-          //          foreach (Channel ch in pt.ChannelsList)
+          //     foreach (EthernetBoardPort pt in DigitalPorts)
+          //          foreach (Channel ch in pt.DigitalChannels)
           //          {
           //               getResult = null;
 
@@ -334,8 +334,8 @@ namespace snmpd
           //               }
           //          }
 
-          //     foreach (EthernetBoardPort pt in AnalogPortsList)
-          //          foreach (Channel ch in pt.ChannelsList)
+          //     foreach (EthernetBoardPort pt in AnalogPorts)
+          //          foreach (Channel ch in pt.DigitalChannels)
           //          {
           //               getResult = null;
 

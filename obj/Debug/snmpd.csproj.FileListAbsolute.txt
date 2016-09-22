@@ -71,3 +71,38 @@ C:\Users\ninja\Documents\Programming Stuff\Freelancer_com\Aussie Rorie\snmpd\bin
 C:\Users\ninja\Documents\Programming Stuff\Freelancer_com\Aussie Rorie\snmpd\obj\Debug\snmpd.PowerSnmpAgent.resources
 C:\Users\ninja\Documents\Programming Stuff\Freelancer_com\Aussie Rorie\snmpd\bin\Debug\snmpd.exe.CodeAnalysisLog.xml
 C:\Users\ninja\Documents\Programming Stuff\Freelancer_com\Aussie Rorie\snmpd\bin\Debug\snmpd.exe.lastcodeanalysissucceeded
+C:\CodeBases\snmpd\bin\Debug\snmpd.exe.config
+C:\CodeBases\snmpd\obj\Debug\snmpd.exe
+C:\CodeBases\snmpd\obj\Debug\snmpd.pdb
+C:\CodeBases\snmpd\obj\Debug\snmpd.csprojResolveAssemblyReference.cache
+C:\CodeBases\snmpd\obj\Debug\snmpd.frmPushButtons.resources
+C:\CodeBases\snmpd\obj\Debug\snmpd.MainForm.resources
+C:\CodeBases\snmpd\obj\Debug\snmpd.PowerSnmpAgent.resources
+C:\CodeBases\snmpd\obj\Debug\snmpd.Properties.Resources.resources
+C:\CodeBases\snmpd\obj\Debug\snmpd.csproj.GenerateResource.Cache
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\snmpd.exe.config
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\snmpd.XML
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\snmpd.exe
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\snmpd.pdb
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\snmpd.exe.CodeAnalysisLog.xml
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\snmpd.exe.lastcodeanalysissucceeded
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\Automation.BDaq.dll
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\Crad.Windows.Forms.Actions.dll
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\log4net.dll
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\Microsoft.Practices.Unity.Configuration.dll
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\Microsoft.Practices.Unity.dll
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\Mono.Posix.dll
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\Office2007Renderer.dll
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\SharpSnmpLib.dll
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\SharpSnmpLib.Mib.dll
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\SharpSnmpLib.pdb
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\SharpSnmpLib.xml
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\SharpSnmpLib.Mib.pdb
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\bin\Debug\SharpSnmpLib.Mib.xml
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\obj\Debug\snmpd.frmPushButtons.resources
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\obj\Debug\snmpd.MainForm.resources
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\obj\Debug\snmpd.Properties.Resources.resources
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\obj\Debug\snmpd.csproj.GenerateResource.Cache
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\obj\Debug\snmpd.exe
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\obj\Debug\snmpd.pdb
+C:\CodeBases\Sports Broadcast Router - Working0\snmpd\obj\Debug\snmpd.csprojResolveAssemblyReference.cache
